@@ -14,6 +14,8 @@ To Take Note
 
 Running the App
 ---------------
+Extract the downloaded zip file to c:\dooh-security-scanner
+
 There are 2 ways to run this app
 
 Way 1 (For known ip addresses):
