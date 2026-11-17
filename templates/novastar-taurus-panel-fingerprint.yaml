@@ -1,0 +1,27 @@
+id: novastar-taurus-panel-fingerprint
+
+info:
+  name: NovaStar Taurus Aggregated Panel Fingerprint
+  author: security-researcher
+  severity: info
+  description: Comprehensive check verifying common variations of titles, headers, or client-side JavaScript references unique to ViPlex platforms.
+  tags: panel, novastar, taurus
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "content=\"NovaStar\""
+          - "var login"
+          - "ViPlex Core"
+        condition: or
+        part: body
+
+      - type: status
+        status:
+          - 200

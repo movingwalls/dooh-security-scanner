@@ -1,0 +1,18 @@
+id: detect-ssh-service
+
+info:
+  name: SSH Service Detection
+  author: security-user
+  severity: info
+  tags: network,ssh,discovery
+
+tcp:
+  - host:
+      - "{{Hostname}}"
+    port: 22
+    read-size: 1024
+    matchers:
+      - type: regex
+        part: body
+        regex:
+          - "^SSH-\\d+\\.\\d+-

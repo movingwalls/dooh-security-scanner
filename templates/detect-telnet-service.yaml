@@ -1,0 +1,18 @@
+id: detect-telnet-service
+
+info:
+  name: Telnet Service Detection
+  author: security-user
+  severity: info
+  tags: network,telnet,discovery
+
+tcp:
+  - host:
+      - "{{Hostname}}"
+    port: 23
+    read-size: 1024
+    matchers:
+      - type: regex
+        part: body
+        regex:
+          - "(?i)(Telnet|login:|Password:)"

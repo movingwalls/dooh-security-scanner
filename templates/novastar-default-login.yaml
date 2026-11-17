@@ -1,0 +1,36 @@
+id: novastar-default-login
+info:
+  name: NovaStar Player Service / VNNOX Default Credentials
+  author: security-researcher
+  severity: high
+  description: Checks if the NovaStar web interface or API relies on default credentials (admin/123456).
+  tags: novastar,default-login,taurus
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/api/login"
+      - "{{BaseURL}}/auth/login"
+    
+    headers:
+      Content-Type: application/json
+
+    body: '{"username":"admin","password":"{{password}}"}'
+
+    payloads:
+      password:
+        - "123456"
+        - "admin"
+        - "666"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        words:
+          - "token"
+          - "success"
+          - "login success"
+        condition: or

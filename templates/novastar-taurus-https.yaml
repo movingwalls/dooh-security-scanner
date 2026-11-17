@@ -1,0 +1,27 @@
+id: novastar-taurus-https
+
+info:
+  name: NovaStar Taurus Web Management Portal - HTTPS Detection
+  author: security-researcher
+  severity: info
+  description: Detects the exposure of NovaStar Taurus Series (ViPlex) web management portal over secure HTTPS.
+  tags: misconfig, novastar, taurus, viplex, ssl
+
+http:
+  - method: GET
+    path:
+      - "https://{{Hostname}}/"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "NovaStar"
+          - "Taurus"
+          - "ViPlex"
+        condition: or
+        part: body
+
+      - type: status
+        status:
+          - 200

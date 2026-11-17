@@ -1,0 +1,25 @@
+id: novastar-service-ports
+info:
+  name: NovaStar Control Service Port Detection
+  author: security-researcher
+  severity: medium
+  description: Detects raw service ports dedicated to NovaStar/NovaLCT screen configurations exposed to the WAN.
+  tags: network,novastar,port
+
+network:
+  - inputs:
+      - data: "GET / HTTP/1.1\r\n\r\n"
+    host:
+      - "{{Hostname}}:5200"
+      - "{{Hostname}}:6000"
+      - "{{Hostname}}:8001"
+      - "{{Hostname}}:9000"
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        words:
+          - "NovaStar"
+          - "Terminal Server"
+          - "TaurusPlayer"
+        condition: or

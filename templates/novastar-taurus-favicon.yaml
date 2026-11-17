@@ -1,0 +1,21 @@
+id: novastar-taurus-favicon
+
+info:
+  name: NovaStar Taurus Portal - Favicon Detection
+  author: security-researcher
+  severity: info
+  description: Detects NovaStar Taurus portals by analyzing the specific favicon asset if pages are obfuscated.
+  tags: misconfig, novastar, taurus, favicon
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/favicon.ico"
+
+    matchers:
+      - type: word
+        words:
+          - "NovaStar"
+          - "ViPlex"
+        part: header
+        negative: true # Ensures we look at the content asset or standard respon

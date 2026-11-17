@@ -1,0 +1,19 @@
+id: network-port-example
+info:
+  name: Custom Port Network Scan
+  author: security-team
+  severity: info
+
+network:
+  - host:
+      - "{{Hostname}}"
+    # Define target ports separately for flexibility
+    port: 22, 2222 
+    
+    inputs:
+      - data: "Help\r\n"
+    
+    matchers:
+      - type: word
+        words:
+          - "SSH-"
