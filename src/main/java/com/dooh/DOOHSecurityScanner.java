@@ -42,6 +42,10 @@ public final class DOOHSecurityScanner {
             "Only scan IP addresses and devices that you own or are explicitly authorised to test.\n"
                     + "Unauthorised scanning may be illegal. Moving Walls is not responsible for misuse.";
 
+    /** Null device used as the child's stdin so Nuclei never waits for piped input. */
+    private static final ProcessBuilder.Redirect NULL_INPUT = ProcessBuilder.Redirect.from(
+            new java.io.File(System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win") ? "NUL" : "/dev/null"));
+
     private DOOHSecurityScanner() {
     }
 
@@ -225,6 +229,7 @@ public final class DOOHSecurityScanner {
      */
     private static int exec(List<String> cmd, Path log) throws IOException, InterruptedException {
         ProcessBuilder pb = new ProcessBuilder(cmd);
+        pb.redirectInput(NULL_INPUT); // Nuclei waits for piped stdin to close if it is left open
         pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
         pb.redirectError(log.toFile());
         Process p = pb.start();
@@ -247,6 +252,7 @@ public final class DOOHSecurityScanner {
             Path out = Files.createTempFile("dooh-nuclei-version", ".txt");
             try {
                 ProcessBuilder pb = new ProcessBuilder(nuclei, "-version", "-duc", "-nc");
+                pb.redirectInput(NULL_INPUT);
                 pb.redirectErrorStream(true);
                 pb.redirectOutput(out.toFile());
                 Process p = pb.start();

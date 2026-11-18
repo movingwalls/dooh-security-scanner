@@ -17,8 +17,13 @@ set +e
 java -jar target/dooh-security-scanner.jar -h 127.0.0.1 --nuclei "$NUCLEI" --out "$SITE/scans" --yes | tee "$SITE/out.txt"
 CODE=${PIPESTATUS[0]}
 set -e
-if [ "$CODE" -ne 0 ] || ! grep -q "^\[PASS\]" "$SITE/out.txt"; then
-  echo "FALSE POSITIVE: a plain web server did not PASS (exit $CODE)" >&2
+# The machine running this check may itself run sshd on port 22 (CI runners do). That is a true finding about
+# the machine, not a false positive about the web page, so SSH findings are ignored here. Anything else matching
+# a plain web server means a template is too broad.
+IDS=$(cat "$SITE"/scans/*/results.jsonl 2>/dev/null | grep -o '"template-id":"[^"]*"' | sed 's/.*:"//;s/"$//' | sort -u || true)
+UNEXPECTED=$(printf '%s\n' "$IDS" | grep -vxE 'dooh-ssh-banner|dooh-ssh-alt-port|' || true)
+if [ "$CODE" -ge 2 ] || [ -n "$UNEXPECTED" ]; then
+  echo "FALSE POSITIVE: a plain web server matched template(s): ${UNEXPECTED:-none} (exit $CODE)" >&2
   exit 1
 fi
-echo "OK: plain web server passes"
+echo "OK: plain web server does not match any web/LED/ADB template"

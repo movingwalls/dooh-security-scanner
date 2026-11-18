@@ -22,6 +22,7 @@ Per-release notes are in [docs/releases/](docs/releases/).
   real subnet, skips virtual adapters, shows the network and asks before probing.
 - Findings were lost: results are now saved as `results.jsonl`, `report.txt` and `report.json`
   with the matched URL/port and evidence.
+- Scans stalled for minutes because Nuclei waited on an open stdin pipe; the scanner now gives it no stdin.
 - Hard-coded `C:\Users\...` paths; the scanner now runs on Windows, macOS and Linux.
 
 ### Added
