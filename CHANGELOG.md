@@ -6,6 +6,11 @@ Per-release notes are in [docs/releases/](docs/releases/).
 
 ## [1.0.0-rc1] - 2026-11-18 (release candidate)
 
+### Added
+- Double-click launchers `dooh-security-scanner-easy.bat` (scan `targets.txt`) and
+  `dooh-security-scanner-discover-easy.bat` (LAN discovery), plus pass-through `dooh-security-scanner.bat`,
+  updated to the new single-command CLI and shipped in both zips.
+
 ### Fixed
 - 5 templates that did not load (`detect-ssh-service`, `ssh-open`, `open-vnc-interface`,
   `exposed-adb-detection`, `huidu-hdplayer-port-detect`): truncated file, `status: success`,

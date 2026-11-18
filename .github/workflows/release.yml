@@ -41,7 +41,7 @@ jobs:
           mkdir "$DIR"
           cp target/dooh-security-scanner.jar "$DIR/"
           cp -r templates "$DIR/"
-          cp README.md LICENSE NOTICE THIRD_PARTY_LICENSES.md SECURITY.md CHANGELOG.md targets.example.txt dooh-scan.sh dooh-scan.bat "$DIR/"
+          cp README.md LICENSE NOTICE THIRD_PARTY_LICENSES.md SECURITY.md CHANGELOG.md targets.example.txt dooh-scan.sh dooh-scan.bat dooh-security-scanner*.bat "$DIR/"
           cp -r docs "$DIR/"
           zip -r "${DIR}.zip" "$DIR"
           sha256sum "${DIR}.zip" > "${DIR}.zip.sha256"
@@ -101,7 +101,7 @@ jobs:
       - name: Package
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          cp README.md SECURITY.md CHANGELOG.md targets.example.txt dist/dooh-security-scanner/
+          cp README.md SECURITY.md CHANGELOG.md targets.example.txt dooh-scan.bat dooh-security-scanner*.bat dist/dooh-security-scanner/
           cp -r docs dist/dooh-security-scanner/
           cd dist
           7z a "../dooh-security-scanner-${VERSION}-windows.zip" dooh-security-scanner

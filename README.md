@@ -29,6 +29,9 @@ Unauthorised scanning may be illegal. The scanner asks you to confirm this befor
 dooh-security-scanner.exe -t targets.txt
 ```
 
+Prefer double-clicking? Use `dooh-security-scanner-easy.bat` (scans `targets.txt`; creates it from the example
+on first run) or `dooh-security-scanner-discover-easy.bat` (finds devices on your own network first).
+
 Verify the download first with the `.sha256` file next to it (`certutil -hashfile <zip> SHA256`).
 
 ## Other platforms and the single jar
