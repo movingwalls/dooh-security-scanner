@@ -1,0 +1,41 @@
+id: rdp-detect
+
+info:
+  name: RDP - Detection
+  # Adapted from the ProjectDiscovery community template "rdp-detect"
+  # (https://github.com/projectdiscovery/nuclei-templates, MIT licence).
+  # Original author: pussycat0x. See NOTICE.
+  author: pussycat0x,movingwalls
+  severity: info
+  description: |
+    Remote Desktop Protocol (RDP) is answering on TCP 3389. RDP is a common way
+    into Windows media players and should not be reachable from the internet.
+  remediation: |
+    Block inbound TCP 3389 at the router/firewall. Reach the player through a
+    VPN or an outbound-only remote-support tool, and enable Network Level
+    Authentication with strong passwords.
+  reference:
+    - https://github.com/projectdiscovery/nuclei-templates
+  metadata:
+    verified: true
+    max-request: 1
+    shodan-query: port:"3389"
+    owasp-iot: I2 - Insecure Network Services
+  tags: dooh,windows,js,network,rdp,discovery
+
+javascript:
+  - code: |
+      let m = require('nuclei/rdp');
+      let response = m.IsRDP(Host,Port);
+      Export(response);
+
+    args:
+      Host: "{{Host}}"
+      Port: "3389"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'success == true'
+          - 'contains(response, "\"IsRDP\": true")'
+        condition: and

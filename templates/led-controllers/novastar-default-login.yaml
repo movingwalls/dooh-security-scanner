@@ -1,0 +1,52 @@
+id: dooh-novastar-default-login
+
+info:
+  name: NovaStar Player Service / VNNOX Default Credentials
+  author: movingwalls
+  severity: high
+  description: |
+    The NovaStar web interface or API accepts a vendor default password.
+    INTRUSIVE: this template submits login attempts, so it only runs when the
+    scanner is started with --intrusive and the device owner has consented.
+  remediation: |
+    Change the default password immediately, and keep the management interface
+    off the internet.
+  metadata:
+    owasp-iot: I1 - Weak, Guessable, or Hardcoded Passwords
+  # The "intrusive" tag is excluded by the scanner unless --intrusive is given.
+  tags: dooh,novastar,default-login,taurus,intrusive
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/api/login"
+      - "{{BaseURL}}/auth/login"
+
+    headers:
+      Content-Type: application/json
+
+    body: '{"username":"admin","password":"{{password}}"}'
+
+    payloads:
+      password:
+        - "123456"
+        - "admin"
+        - "666"
+
+    attack: batteringram
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      # A real success carries a token or "success":true. A bare "success"
+      # substring also matches {"success":false}.
+      - type: regex
+        part: body
+        regex:
+          - '"token"\s*:\s*"[^"]+"'
+          - '"success"\s*:\s*true'
+        condition: or

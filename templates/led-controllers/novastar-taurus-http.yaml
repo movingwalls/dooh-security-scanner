@@ -1,0 +1,43 @@
+id: dooh-novastar-taurus-http
+
+info:
+  name: NovaStar Taurus Web Management Portal - HTTP Detection
+  author: movingwalls
+  severity: info
+  description: A NovaStar Taurus (ViPlex) web management portal is reachable over HTTP.
+  remediation: |
+    Do not port-forward the player's web portal. Reach it only from the local
+    network or a VPN, and change the default password.
+  metadata:
+    owasp-iot: I1 - Weak, Guessable, or Hardcoded Passwords
+  tags: dooh,novastar,taurus,viplex,panel
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "<title>NovaStar</title>"
+          - "<title>Taurus</title>"
+          - "<title>ViPlex</title>"
+        condition: or
+
+      - type: word
+        part: body
+        words:
+          - "NovaStar"
+          - "ViPlex"
+        condition: and
+
+    # Shows the page title as evidence in the report.
+    extractors:
+      - type: regex
+        part: body
+        group: 1
+        regex:
+          - "(?i)<title>([^<]{1,80})</title>"

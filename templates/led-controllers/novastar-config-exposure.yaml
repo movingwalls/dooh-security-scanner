@@ -1,0 +1,48 @@
+id: dooh-novastar-config-exposure
+
+info:
+  name: NovaStar Player Service / VPlayer Configuration Leak
+  author: movingwalls
+  severity: medium
+  description: |
+    A configuration or device-information file that NovaStar player services
+    use is readable without logging in.
+  remediation: |
+    Restrict the player's web service to the local network or a VPN and update
+    the firmware. Do not publish the player's web port to the internet.
+  metadata:
+    owasp-iot: I2 - Insecure Network Services
+  tags: dooh,novastar,misconfig,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/config/device.json"
+      - "{{BaseURL}}/setting.json"
+
+    stop-at-first-match: true
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      # Quoted JSON keys only - a bare substring such as "sn" matches almost any page.
+      - type: regex
+        part: body
+        regex:
+          - '"(deviceId|aliasName|terminalId|sn)"\s*:'
+
+      - type: word
+        part: header
+        words:
+          - "json"
+        case-insensitive: true
+
+    # Shows the page title as evidence in the report.
+    extractors:
+      - type: regex
+        part: body
+        group: 1
+        regex:
+          - "(?i)<title>([^<]{1,80})</title>"

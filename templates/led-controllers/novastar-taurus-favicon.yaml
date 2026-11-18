@@ -1,0 +1,43 @@
+id: dooh-novastar-taurus-favicon
+
+info:
+  name: NovaStar Taurus Portal - Favicon Detection
+  author: movingwalls
+  severity: info
+  description: |
+    Detects a NovaStar Taurus portal from its favicon response headers when the
+    page itself is obfuscated.
+  remediation: |
+    Do not port-forward the player's web portal. Reach it only from the local
+    network or a VPN.
+  metadata:
+    owasp-iot: I2 - Insecure Network Services
+  tags: dooh,novastar,taurus,favicon,panel
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/favicon.ico"
+
+    # Both must hold, so an ordinary web server (200 + any favicon) is not a match.
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: header
+        words:
+          - "NovaStar"
+          - "ViPlex"
+        case-insensitive: true
+        condition: or
+
+    # Shows the page title as evidence in the report.
+    extractors:
+      - type: regex
+        part: body
+        group: 1
+        regex:
+          - "(?i)<title>([^<]{1,80})</title>"

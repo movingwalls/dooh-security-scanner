@@ -1,0 +1,31 @@
+id: dooh-ssh-alt-port
+
+info:
+  name: SSH Service Detection (ports 22 and 2222)
+  author: movingwalls
+  severity: info
+  description: An SSH server is answering on TCP 22 or 2222.
+  remediation: |
+    Do not expose SSH to the internet. Restrict it to your management network
+    or VPN, disable password logins in favour of keys, and change any vendor
+    default password.
+  metadata:
+    owasp-iot: I2 - Insecure Network Services
+  tags: dooh,linux,network,ssh,discovery
+
+tcp:
+  - host:
+      - "{{Hostname}}"
+    port: 22,2222
+    read-size: 1024
+    matchers:
+      - type: regex
+        part: data
+        regex:
+          - "^SSH-\\d+\\.\\d+-"
+
+    extractors:
+      - type: regex
+        part: data
+        regex:
+          - "^SSH-[^\\r\\n]{1,80}"

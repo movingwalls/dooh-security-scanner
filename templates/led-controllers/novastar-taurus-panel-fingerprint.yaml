@@ -1,0 +1,40 @@
+id: dooh-novastar-taurus-panel-fingerprint
+
+info:
+  name: NovaStar Taurus Aggregated Panel Fingerprint
+  author: movingwalls
+  severity: info
+  description: Checks for strings unique to the ViPlex web platform used by NovaStar Taurus players.
+  remediation: |
+    Do not port-forward the player's web portal. Reach it only from the local
+    network or a VPN.
+  metadata:
+    owasp-iot: I2 - Insecure Network Services
+  tags: dooh,novastar,taurus,panel
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      # "var login" is far too generic on its own, so it is not used here.
+      - type: word
+        part: body
+        words:
+          - 'content="NovaStar"'
+          - "ViPlex Core"
+        condition: or
+
+    # Shows the page title as evidence in the report.
+    extractors:
+      - type: regex
+        part: body
+        group: 1
+        regex:
+          - "(?i)<title>([^<]{1,80})</title>"

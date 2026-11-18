@@ -1,0 +1,7 @@
+# One target per line: an IPv4 address, a CIDR block (/22 to /32) or a host name.
+# Lines starting with # are ignored. Copy this file to targets.txt and edit it.
+#
+# Only list addresses you own or are authorised to test.
+# 203.0.113.10
+# 203.0.113.0/28
+# screen-01.example.com

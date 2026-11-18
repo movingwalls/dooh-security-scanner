@@ -1,0 +1,37 @@
+id: dooh-xixun-y-series-header-detect
+
+info:
+  name: XiXun Y-Series Controller Detection (Headers)
+  author: movingwalls
+  severity: info
+  description: Detects the web management interface of XiXun Y-Series asynchronous controllers from response headers.
+  remediation: |
+    Do not port-forward the controller's web interface. Reach it only from the
+    local network or a VPN, and change the default password.
+  metadata:
+    owasp-iot: I1 - Weak, Guessable, or Hardcoded Passwords
+  tags: dooh,xixun,led,controller,panel
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: header
+        words:
+          - "Server: Xixun Embedded HTTP Server"
+
+    # Shows the page title as evidence in the report.
+    extractors:
+      - type: regex
+        part: body
+        group: 1
+        regex:
+          - "(?i)<title>([^<]{1,80})</title>"

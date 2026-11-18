@@ -1,0 +1,44 @@
+id: dooh-novastar-player-service-http
+
+info:
+  name: NovaStar Taurus Player Service Exposure
+  author: movingwalls
+  severity: low
+  description: An HTTP player-service API used by NovaStar multimedia players is reachable.
+  remediation: |
+    Restrict the player's web service to the local network or a VPN and do not
+    publish its port to the internet.
+  metadata:
+    owasp-iot: I2 - Insecure Network Services
+  tags: dooh,novastar,taurus,api,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v1/player/status"
+      - "{{BaseURL}}/player/index.html"
+      - "{{BaseURL}}/vplayer"
+
+    stop-at-first-match: true
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: body
+        words:
+          - "Taurus"
+          - "Multimedia Player"
+          - "NovaLCT"
+          - "PlayerService"
+        condition: or
+
+    # Shows the page title as evidence in the report.
+    extractors:
+      - type: regex
+        part: body
+        group: 1
+        regex:
+          - "(?i)<title>([^<]{1,80})</title>"

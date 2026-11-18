@@ -1,0 +1,19 @@
+DOOH Security Scanner
+Copyright 2026 Moving Walls
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product is designed to run with Nuclei by ProjectDiscovery
+(https://github.com/projectdiscovery/nuclei), licensed under the MIT licence.
+Nuclei is not part of this repository. On first run the scanner can download the
+official release, verified against a SHA-256 checksum, on the user's request.
+
+templates/windows/rdp-open.yaml is adapted from the community template
+"rdp-detect" in https://github.com/projectdiscovery/nuclei-templates
+(MIT licence, Copyright ProjectDiscovery, Inc.), originally written by
+pussycat0x. See THIRD_PARTY_LICENSES.md.
+
+Moving Walls is not affiliated with, endorsed by, or sponsored by NovaStar,
+Colorlight, Huidu, XiXun, Samsung, Google, ProjectDiscovery or any other vendor
+whose products are checked by, or used with, this tool. All product names are
+trademarks of their respective owners and are used for identification only.

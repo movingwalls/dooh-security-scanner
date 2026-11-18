@@ -1,1 +1,27 @@
+# build output
+target/
+bin/
+*.class
+
+# scan output and local files - never commit these
+scans/
+targets.txt
+config.txt
+discovered_ips.txt
+scanner.bat
+*.jsonl
+
+# third-party binaries are downloaded by the user, not committed
+nuclei
 nuclei.exe
+
+# IDE
+.classpath
+.project
+.settings/
+.idea/
+*.iml
+.vscode/
+
+# local release output
+dist/

@@ -1,0 +1,32 @@
+id: dooh-novastar-service-ports
+
+info:
+  name: NovaStar Control Service Port Detection
+  author: movingwalls
+  severity: medium
+  description: |
+    A TCP port used by NovaStar/NovaLCT screen configuration answers like
+    NovaStar software (ports 5200, 6000, 8001, 9000).
+  remediation: |
+    Block inbound access to these ports at the router/firewall and manage the
+    screen from the local network or a VPN.
+  metadata:
+    owasp-iot: I2 - Insecure Network Services
+  tags: dooh,novastar,network,port
+
+tcp:
+  - inputs:
+      - data: "GET / HTTP/1.0\r\n\r\n"
+    host:
+      - "{{Hostname}}"
+    port: 5200,6000,8001,9000
+    read-size: 2048
+
+    matchers:
+      - type: word
+        part: data
+        words:
+          - "NovaStar"
+          - "Terminal Server"
+          - "TaurusPlayer"
+        condition: or

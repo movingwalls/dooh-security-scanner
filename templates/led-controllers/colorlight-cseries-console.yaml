@@ -1,0 +1,43 @@
+id: dooh-colorlight-cseries-console
+
+info:
+  name: Colorlight C-Series Cloud Player Management Interface - Detect
+  author: movingwalls
+  severity: info
+  description: |
+    The web management console of a Colorlight C-Series LED cloud player is
+    reachable. An exposed panel can allow display manipulation or device changes.
+  remediation: |
+    Do not port-forward the player's web console. Reach it only from the local
+    network or a VPN, and change the default password.
+  metadata:
+    product: colorlight_c-series
+    vendor: colorlight
+    owasp-iot: I1 - Weak, Guessable, or Hardcoded Passwords
+  tags: dooh,colorlight,led,panel,console
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+      - "{{BaseURL}}/index.html"
+      - "{{BaseURL}}/login.html"
+
+    stop-at-first-match: true
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Colorlight Cloud Player"
+          - "Colorlight Web Console"
+          - "Colorlight"
+        case-insensitive: true
+
+    # Shows the page title as evidence in the report.
+    extractors:
+      - type: regex
+        part: body
+        group: 1
+        regex:
+          - "(?i)<title>([^<]{1,80})</title>"

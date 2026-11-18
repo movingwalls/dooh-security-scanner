@@ -1,0 +1,45 @@
+id: dooh-novastar-vnnox-panel
+
+info:
+  name: NovaStar VNNOX Admin Panel - Detection
+  author: movingwalls
+  severity: info
+  description: A NovaStar VNNOX management dashboard is reachable.
+  remediation: |
+    Do not publish the VNNOX/Player Service web port to the internet. Manage
+    the screen from the local network or a VPN.
+  metadata:
+    owasp-iot: I2 - Insecure Network Services
+  tags: dooh,novastar,vnnox,panel,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+      - "{{BaseURL}}/login"
+      - "{{BaseURL}}/vnnox"
+
+    stop-at-first-match: true
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "VNNOX Standard"
+          - "VNNOX Cloud"
+          - "NovaStar Tech"
+          - "vnnox-login"
+        condition: or
+
+      - type: word
+        part: header
+        words:
+          - "X-Powered-By: NovaStar"
+
+    # Shows the page title as evidence in the report.
+    extractors:
+      - type: regex
+        part: body
+        group: 1
+        regex:
+          - "(?i)<title>([^<]{1,80})</title>"

@@ -1,0 +1,145 @@
+# DOOH Security Scanner
+
+A free, open-source **perimeter check for digital out-of-home (DOOH) screens**. Give it a list of IP
+addresses; it checks them for exposed management interfaces and risky services (open ADB, Telnet, VNC, RDP,
+NovaStar / Colorlight / Huidu / XiXun panels, ...) and reports **PASS**, **REVIEW** or **FAIL** for each one,
+with the evidence and a recommended fix. It is built on [Nuclei](https://github.com/projectdiscovery/nuclei)
+and runs entirely on your own machine: no scan data is sent anywhere.
+
+> **Release candidate (1.0.0-rc1).** Static checks and unit tests pass; the vendor checks are being verified
+> against real devices (see [docs/TESTING.md](docs/TESTING.md)). Treat PASS as "none of these checks matched",
+> not as proof that a screen is secure.
+
+## Authorised use only
+
+Only scan IP addresses and devices that **you own or are explicitly authorised, in writing, to test**.
+Unauthorised scanning may be illegal. The scanner asks you to confirm this before every run. See
+[docs/LEGAL.md](docs/LEGAL.md). Moving Walls is not affiliated with any of the device vendors named here.
+
+## Quick start (Windows)
+
+1. Download `dooh-security-scanner-<version>-windows.zip` from the **Releases** page and extract it.
+   It includes everything: the scanner, its own Java runtime, Nuclei and the templates.
+2. If your antivirus blocks `nuclei.exe` (security tools are often flagged), add `nuclei.exe` to the
+   antivirus exception/allowlist.
+3. Copy `targets.example.txt` to `targets.txt` and list your addresses, one per line.
+4. Open Command Prompt or PowerShell in the extracted folder and run:
+
+```
+dooh-security-scanner.exe -t targets.txt
+```
+
+Verify the download first with the `.sha256` file next to it (`certutil -hashfile <zip> SHA256`).
+
+## Other platforms and the single jar
+
+**Officially supported: Windows 10/11 (64-bit).** Linux and macOS work on a best-effort basis.
+
+Download `dooh-security-scanner-<version>.zip` (or just the jar), install **Java 17+**, then:
+
+```
+java -jar dooh-security-scanner.jar -t targets.txt
+```
+
+You do **not** need to install Nuclei or copy the templates yourself:
+
+- **Nuclei is downloaded automatically** the first time it is needed, after you approve it. The scanner fetches
+  the pinned release (`v3.4.10`) from ProjectDiscovery's official GitHub page, checks it against a SHA-256
+  checksum built into the scanner (the download is discarded if it does not match) and stores it in
+  `~/.dooh-security-scanner/` (on Windows: `C:\Users\<you>\.dooh-security-scanner\`). Use `--yes` to approve
+  in scripts, `--offline` to forbid downloads, or `--install-nuclei` to just fetch it now.
+  If you prefer, put your own Nuclei next to the jar, on `PATH`, or pass `--nuclei <path>`.
+- **The templates are packaged inside the jar** and extracted automatically. A `templates/` folder next to the
+  jar (or `--templates <dir>`) takes precedence, which is handy for testing your own templates.
+
+## Using it
+
+```
+java -jar dooh-security-scanner.jar -t targets.txt                    targets from a file
+java -jar dooh-security-scanner.jar -h 203.0.113.10,203.0.113.0/28    targets on the command line
+java -jar dooh-security-scanner.jar --discover                        find devices on your own LAN first
+```
+
+Targets are IPv4 addresses, CIDR blocks from /22 to /32, or host names, one per line (`#` for comments).
+Anything else is rejected before anything runs.
+
+| Option | Meaning |
+|---|---|
+| `-t, --targets <file>` | targets file |
+| `-h, --hosts <list>` | comma-separated targets |
+| `--discover` | find devices on the local network (shows the network, asks to confirm) |
+| `--intrusive` | also try vendor default passwords. **Only with the owner's written consent** |
+| `--templates <dir>`, `--nuclei <path>`, `--out <dir>` | locations |
+| `--install-nuclei` | download and verify Nuclei, then exit |
+| `--offline` | never download anything |
+| `-y, --yes` | skip prompts (you confirm you are authorised, and approve the Nuclei download) |
+| `--version`, `--help` | version and usage |
+
+### Safety limits
+
+Nuclei is started once for all targets with fixed, conservative settings (`-rate-limit 10 -c 5 -timeout 4`)
+so low-power LED controllers and cellular links are not overloaded. Only this project's templates are loaded,
+never Nuclei's general web-exploit library. Targets are validated and never passed through a shell.
+
+## Reading the results
+
+```
+[PASS]   203.0.113.10  -  No exposed DOOH management interfaces found
+[FAIL]   203.0.113.11  -  1 finding(s), highest: CRITICAL
+           - CRITICAL: Android Debug Bridge (ADB) - Unauthenticated Connection Accepted
+             Evidence: 203.0.113.11:5555
+             Fix: Disable "ADB over network" ... and block inbound TCP 5555 ...
+```
+
+| Status | Meaning |
+|---|---|
+| **PASS** | none of this tool's checks matched |
+| **REVIEW** | a panel or service answered (info/low severity); check whether it should be reachable |
+| **FAIL** | a medium, high or critical finding, such as open ADB, Telnet or VNC |
+| **ERROR** | a template failed to load or Nuclei failed. **A PASS is never shown for a run that did not complete** |
+
+Each run saves `report.txt`, `report.html`, `report.json` and the raw `results.jsonl` in `scans/<timestamp>/`.
+Exit codes: `0` no FAIL, `1` at least one FAIL, `2` bad usage or invalid targets, `3` ERROR.
+
+A finding means the service answered **from where you scanned**. Scanned from inside your own network, it does
+not by itself prove the port is reachable from the internet: check your router's port-forwards, or scan from
+outside. **What to do about each finding: [docs/FIXING-FINDINGS.md](docs/FIXING-FINDINGS.md).**
+Findings map to the [OWASP IoT Top 10](https://owasp.org/www-project-internet-of-things/) via the `owasp-iot`
+field in each template.
+
+## What it checks
+
+| Folder | Checks |
+|---|---|
+| `templates/android/` | Android Debug Bridge (ADB) on TCP 5555: reachable, and accepting connections without authorisation |
+| `templates/led-controllers/` | NovaStar Taurus / VNNOX / player service, Colorlight C-Series, Huidu HDPlayer, XiXun Y-Series: exposed web panels and control ports; NovaStar default login (intrusive only) |
+| `templates/linux/` | SSH (22, 2222), Telnet (23) and VNC (5900) reachable |
+| `templates/windows/` | RDP (3389) reachable |
+| `templates/samsung/` | Samsung VXT interface reachable |
+
+## What it does **not** cover
+
+- It does not look for devices on the internet and never scans beyond the addresses you give it
+  (`--discover` only looks at your own local network, after you confirm).
+- It does not test firmware versions or known CVEs, CMS servers (Xibo, MagicINFO, SuperSign), LG webOS,
+  BrightSign, SMB, WinRM, Docker, UPnP, SNMP, RTSP cameras or 4G/LTE router settings.
+- It does not exploit anything. Default-password checks are **off** unless you pass `--intrusive`.
+- It is not a security audit or certification.
+
+## Build from source
+
+```
+mvn verify                       # compile, unit tests, template lint -> target/dooh-security-scanner.jar
+scripts/false-positive-check.sh  # a plain web server must PASS (needs python3, root for port 80)
+```
+
+More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Releases are made by pushing a `v*` tag
+(`git tag v1.0.0 && git push origin v1.0.0`); GitHub Actions builds, tests, and publishes both zips with
+checksums. Tags containing a `-` (such as `v1.0.0-rc1`) are published as pre-releases.
+
+## Contributing, security, licence
+
+- [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [CHANGELOG.md](CHANGELOG.md)
+- Found a vulnerability? [SECURITY.md](SECURITY.md) (private reporting)
+- Licensed under the [Apache License 2.0](LICENSE). Third-party notices: [NOTICE](NOTICE),
+  [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).

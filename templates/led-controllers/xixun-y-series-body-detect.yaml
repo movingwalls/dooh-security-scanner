@@ -1,0 +1,42 @@
+id: dooh-xixun-y-series-body-detect
+
+info:
+  name: XiXun Y-Series Controller Detection (Body)
+  author: movingwalls
+  severity: info
+  description: Detects the web management interface of XiXun Y-Series asynchronous controllers from the page body.
+  remediation: |
+    Do not port-forward the controller's web interface. Reach it only from the
+    local network or a VPN, and change the default password.
+  metadata:
+    owasp-iot: I1 - Weak, Guessable, or Hardcoded Passwords
+  tags: dooh,xixun,led,controller,panel
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/index.html"
+      - "{{BaseURL}}/login.html"
+
+    stop-at-first-match: true
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: body
+        words:
+          - "<title>Asynchronous Control System</title>"
+          - "xixun"
+        case-insensitive: true
+        condition: or
+
+    # Shows the page title as evidence in the report.
+    extractors:
+      - type: regex
+        part: body
+        group: 1
+        regex:
+          - "(?i)<title>([^<]{1,80})</title>"

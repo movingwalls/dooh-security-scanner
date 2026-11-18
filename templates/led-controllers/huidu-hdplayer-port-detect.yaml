@@ -1,0 +1,30 @@
+id: dooh-huidu-port-detect
+
+info:
+  name: Huidu LED Controller Control Port Identification
+  author: movingwalls
+  severity: info
+  description: Identifies open TCP control and web ports that answer like Huidu hardware.
+  remediation: |
+    Block inbound access to the controller's ports (80, 8080, 5005, 9000) at the
+    router/firewall; manage it from the local network or a VPN.
+  metadata:
+    owasp-iot: I2 - Insecure Network Services
+  tags: dooh,huidu,led,network,port-detect
+
+tcp:
+  - inputs:
+      - data: "GET / HTTP/1.0\r\n\r\n"
+    host:
+      - "{{Hostname}}"
+    port: 80,8080,5005,9000
+    read-size: 2048
+
+    matchers:
+      - type: word
+        part: data
+        words:
+          - "Huidu"
+          - "HDPlayer Server"
+        case-insensitive: true
+        condition: or

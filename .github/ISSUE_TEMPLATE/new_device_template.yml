@@ -1,0 +1,20 @@
+name: Request or contribute a device check
+description: Propose a new template for a DOOH device or controller
+labels: [template]
+body:
+  - type: input
+    id: device
+    attributes:
+      label: Vendor, model and firmware
+    validations:
+      required: true
+  - type: textarea
+    id: exposure
+    attributes:
+      label: What is exposed (ports, panels, default settings) and where is that documented?
+    validations:
+      required: true
+  - type: textarea
+    id: access
+    attributes:
+      label: Can you test against a real device? Which?

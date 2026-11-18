@@ -1,0 +1,48 @@
+id: dooh-huidu-hdplayer-detect
+
+info:
+  name: Huidu Technology HDPlayer Web Interface Detection
+  author: movingwalls
+  severity: info
+  description: Detects the Huidu Technology HDPlayer web management interface.
+  remediation: |
+    Do not port-forward the controller's web interface. Reach it only from the
+    local network or a VPN, and change the default password.
+  classification:
+    cpe: cpe:2.3:h:huidu:hdplayer:*:*:*:*:*:*:*:*
+  metadata:
+    owasp-iot: I1 - Weak, Guessable, or Hardcoded Passwords
+  tags: dooh,huidu,led,panel
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+      - "{{BaseURL}}/login.html"
+
+    stop-at-first-match: true
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "HDPlayer"
+          - "Huidu Technology"
+          - "LED Controller Login"
+          - "HD-C16"
+          - "HD-C36"
+        case-insensitive: true
+        condition: or
+
+      - type: word
+        part: header
+        words:
+          - "Huidu-WebServer"
+
+    # Shows the page title as evidence in the report.
+    extractors:
+      - type: regex
+        part: body
+        group: 1
+        regex:
+          - "(?i)<title>([^<]{1,80})</title>"

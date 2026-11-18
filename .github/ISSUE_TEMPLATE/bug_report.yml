@@ -1,0 +1,33 @@
+name: Bug report / false result
+description: The scanner crashed, or a check gave a wrong PASS / FAIL / REVIEW
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not paste real customer IP addresses or credentials. Use example addresses such as 203.0.113.10."
+  - type: input
+    id: version
+    attributes:
+      label: Scanner version (`--version`) and Nuclei version
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: device
+    attributes:
+      label: Device model and firmware (for false positives / negatives)
+  - type: textarea
+    id: logs
+    attributes:
+      label: Report text and the contents of nuclei.log (remove sensitive data)

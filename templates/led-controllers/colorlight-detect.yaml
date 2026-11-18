@@ -1,0 +1,45 @@
+id: dooh-colorlight-cseries-detect
+
+info:
+  name: Colorlight C-Series Web Management Interface Detection
+  author: movingwalls
+  severity: info
+  description: Detects the web console login page for Colorlight C-Series Cloud Players.
+  remediation: |
+    Do not port-forward the player's web console. Reach it only from the local
+    network or a VPN, and change the default password.
+  classification:
+    cpe: cpe:2.3:h:colorlight:c-series:*:*:*:*:*:*:*:*
+  metadata:
+    owasp-iot: I1 - Weak, Guessable, or Hardcoded Passwords
+  tags: dooh,colorlight,led,panel
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+      - "{{BaseURL}}/g2cweb/login.jsp"
+
+    stop-at-first-match: true
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "<title>Colorlight</title>"
+          - "<title>C-Series Cloud Player</title>"
+          - "Colorlight Cloud Player"
+        condition: or
+
+      - type: word
+        part: header
+        words:
+          - "Colorlight-Cloud-Player"
+
+    # Shows the page title as evidence in the report.
+    extractors:
+      - type: regex
+        part: body
+        group: 1
+        regex:
+          - "(?i)<title>([^<]{1,80})</title>"

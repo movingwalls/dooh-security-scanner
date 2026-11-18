@@ -1,0 +1,28 @@
+id: dooh-telnet-open
+
+info:
+  name: Telnet Service Detection (port 23)
+  author: movingwalls
+  severity: high
+  description: |
+    A Telnet service is answering on TCP 23. Telnet sends everything, including
+    passwords, in clear text and is a favourite target of IoT botnets.
+  remediation: |
+    Disable Telnet on the device (use SSH instead) and block inbound TCP 23 at
+    the router/firewall.
+  classification:
+    cwe-id: CWE-319
+  metadata:
+    owasp-iot: I2 - Insecure Network Services
+  tags: dooh,linux,network,telnet,exposure
+
+tcp:
+  - host:
+      - "{{Hostname}}"
+    port: 23
+    read-size: 1024
+    matchers:
+      - type: regex
+        part: data
+        regex:
+          - "(?i)(telnet|login:|password:)"

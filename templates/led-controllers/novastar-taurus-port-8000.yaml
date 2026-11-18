@@ -1,0 +1,39 @@
+id: dooh-novastar-taurus-port-8000
+
+info:
+  name: NovaStar Taurus Web Management Portal - Port 8000
+  author: movingwalls
+  severity: info
+  description: A NovaStar Taurus (ViPlex) portal is reachable on TCP 8000.
+  remediation: |
+    Block inbound TCP 8000 at the router/firewall and reach the player only
+    from the local network or a VPN.
+  metadata:
+    owasp-iot: I2 - Insecure Network Services
+  tags: dooh,novastar,taurus,port8000,panel
+
+http:
+  - method: GET
+    path:
+      - "http://{{Host}}:8000/"
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        part: body
+        words:
+          - "ViPlex"
+          - "NovaStar"
+        condition: or
+
+    # Shows the page title as evidence in the report.
+    extractors:
+      - type: regex
+        part: body
+        group: 1
+        regex:
+          - "(?i)<title>([^<]{1,80})</title>"

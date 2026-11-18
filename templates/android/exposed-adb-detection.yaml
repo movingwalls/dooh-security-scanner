@@ -1,0 +1,36 @@
+id: dooh-adb-port-exposed
+
+info:
+  name: Android Debug Bridge (ADB) - Port 5555 Reachable
+  author: movingwalls
+  severity: high
+  description: |
+    TCP port 5555 answers with the ADB protocol (CNXN or AUTH). Even when the
+    device asks for authorisation, ADB should never be reachable from outside
+    the local network.
+  remediation: |
+    Turn off "ADB over network" on the player and block inbound TCP 5555 at the
+    router/firewall.
+  reference:
+    - https://developer.android.com/tools/adb
+  classification:
+    cwe-id: CWE-668
+  metadata:
+    owasp-iot: I2 - Insecure Network Services
+  tags: dooh,android,adb,network,exposure
+
+tcp:
+  - inputs:
+      - data: "434e584e00000001001000000700000032020000bcb1a7b1686f73743a3a00"
+        type: hex
+    host:
+      - "{{Hostname}}"
+    port: 5555
+    read-size: 2048
+
+    matchers:
+      - type: word
+        words:
+          - "CNXN"
+          - "AUTH"
+        condition: or

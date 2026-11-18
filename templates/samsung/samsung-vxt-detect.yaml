@@ -1,0 +1,38 @@
+id: dooh-samsung-vxt-detect
+
+info:
+  name: Samsung VXT Detection
+  author: movingwalls
+  severity: info
+  description: A Samsung VXT digital signage interface is reachable.
+  remediation: |
+    Restrict the VXT/management interface to your management network or VPN
+    and keep the display firmware up to date.
+  metadata:
+    owasp-iot: I2 - Insecure Network Services
+  tags: dooh,samsung,vxt,panel
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    # Both conditions must hold: a 200 alone matches every web server.
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "Samsung VXT"
+          - "vxt.samsung.com"
+        condition: or
+
+    # Shows the page title as evidence in the report.
+    extractors:
+      - type: regex
+        part: body
+        group: 1
+        regex:
+          - "(?i)<title>([^<]{1,80})</title>"

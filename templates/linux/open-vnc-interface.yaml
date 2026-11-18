@@ -1,0 +1,34 @@
+id: dooh-vnc-open
+
+info:
+  name: VNC Service Detection (port 5900)
+  author: movingwalls
+  severity: high
+  description: |
+    A VNC (RFB) server is answering on TCP 5900. VNC is frequently left with no
+    password or a weak one, which gives anyone full screen control of the player.
+  remediation: |
+    Block inbound TCP 5900 at the router/firewall, set a strong VNC password,
+    and reach the player through a VPN or an outbound-only support tool.
+  classification:
+    cwe-id: CWE-306
+  metadata:
+    owasp-iot: I2 - Insecure Network Services
+  tags: dooh,linux,network,vnc,exposure
+
+tcp:
+  - host:
+      - "{{Hostname}}"
+    port: 5900
+    read-size: 32
+    matchers:
+      - type: regex
+        part: data
+        regex:
+          - "^RFB 00[3-9]\\.\\d{3}"
+
+    extractors:
+      - type: regex
+        part: data
+        regex:
+          - "^RFB 00[3-9]\\.\\d{3}"

@@ -1,0 +1,45 @@
+id: dooh-adb-unauthenticated-access
+
+info:
+  name: Android Debug Bridge (ADB) - Unauthenticated Connection Accepted
+  author: movingwalls
+  severity: critical
+  description: |
+    The device completed an ADB handshake on TCP port 5555 without asking for
+    authentication (it answered CNXN instead of AUTH). Anyone who can reach the
+    port can run shell commands, install apps and read data on the player.
+  impact: Full remote control of the Android media player.
+  remediation: |
+    Disable "ADB over network" / wireless debugging on the player, block inbound
+    TCP 5555 at the router/firewall, and never port-forward it. If remote
+    support is needed, use an outbound-only, authenticated channel.
+  reference:
+    - https://developer.android.com/tools/adb
+    - https://owasp.org/www-project-internet-of-things/
+  classification:
+    cwe-id: CWE-306
+  metadata:
+    owasp-iot: I2 - Insecure Network Services
+  tags: dooh,android,adb,network,unauth
+
+tcp:
+  - inputs:
+      # ADB CNXN message: header (24 bytes) + payload "host::\0" (7 bytes).
+      #   command    "CNXN"            434e584e
+      #   arg0       version 0x01000000 00000001
+      #   arg1       max data 4096      00100000
+      #   data_len   7                  07000000
+      #   data_crc   sum(payload)=0x232 32020000
+      #   magic      ~command           bcb1a7b1
+      - data: "434e584e00000001001000000700000032020000bcb1a7b1686f73743a3a00"
+        type: hex
+    host:
+      - "{{Hostname}}"
+    port: 5555
+    read-size: 2048
+
+    matchers:
+      # A device that requires authorisation answers AUTH; CNXN means it is open.
+      - type: word
+        words:
+          - "CNXN"

@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  NUCLEI_VERSION: "3.4.10"
+  # sha256 of nuclei_3.4.10_linux_amd64.zip, from the official release checksums file
+  NUCLEI_SHA256: "234c12cc5288af071abdcd6f854245b6067345556e1235cf96b76725c1004357"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build and unit tests
+        run: mvn -B verify
+
+      - name: Install pinned Nuclei
+        run: |
+          mkdir -p "$RUNNER_TEMP/nuclei"
+          curl -sSL -o "$RUNNER_TEMP/nuclei.zip" \
+            "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip"
+          echo "${NUCLEI_SHA256}  $RUNNER_TEMP/nuclei.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/nuclei.zip" -d "$RUNNER_TEMP/nuclei"
+          echo "$RUNNER_TEMP/nuclei" >> "$GITHUB_PATH"
+
+      - name: Validate every template loads
+        run: nuclei -validate -t templates -nc -duc
+
+      - name: Plain web server must PASS (false-positive check)
+        run: sudo env "PATH=$PATH" NUCLEI="$(which nuclei)" scripts/false-positive-check.sh
+
+  windows-bundle:
+    # Proves the self-contained Windows build (native .exe + bundled Java runtime) works on every change.
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Build jar
+        run: mvn -B -DskipTests package
+
+      - name: Build self-contained app
+        run: |
+          mkdir input
+          cp target/dooh-security-scanner.jar input/
+          cp -r templates input/
+          jpackage --type app-image --name dooh-security-scanner \
+            --input input --main-jar dooh-security-scanner.jar \
+            --main-class com.dooh.DOOHSecurityScanner \
+            --win-console --app-version 1.0.0 --vendor "Moving Walls" --dest dist
+
+      - name: Smoke test the executable
+        run: |
+          dist/dooh-security-scanner/dooh-security-scanner.exe --version
+          dist/dooh-security-scanner/dooh-security-scanner.exe --help | head -5
+          # no Nuclei present and downloads forbidden => must fail cleanly with exit code 3, not crash
+          set +e
+          dist/dooh-security-scanner/dooh-security-scanner.exe -h 127.0.0.1 --yes --offline --nuclei missing.exe
+          test $? -eq 3
