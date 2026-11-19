@@ -6,7 +6,7 @@ NovaStar / Colorlight / Huidu / XiXun panels, ...) and reports **PASS**, **REVIE
 with the evidence and a recommended fix. It is built on [Nuclei](https://github.com/projectdiscovery/nuclei)
 and runs entirely on your own machine: no scan data is sent anywhere.
 
-> **Release candidate (1.0.0-rc1).** Static checks and unit tests pass; the vendor checks are being verified
+> **Release candidate (1.0.0-rc2).** Static checks and unit tests pass; the vendor checks are being verified
 > against real devices (see [docs/TESTING.md](docs/TESTING.md)). Treat PASS as "none of these checks matched",
 > not as proof that a screen is secure.
 
@@ -38,10 +38,11 @@ Verify the download first with the `.sha256` file next to it (`certutil -hashfil
 
 **Officially supported: Windows 10/11 (64-bit).** Linux and macOS work on a best-effort basis.
 
-Download `dooh-security-scanner-<version>.zip` (or just the jar), install **Java 17+**, then:
+Download `dooh-security-scanner-<version>.zip` (or just `dooh-security-scanner-<version>.jar` from the same
+Releases page), install **Java 17+**, then:
 
 ```
-java -jar dooh-security-scanner.jar -t targets.txt
+java -jar dooh-security-scanner.jar -t targets.txt     # use the downloaded jar's file name
 ```
 
 You do **not** need to install Nuclei or copy the templates yourself:

@@ -4,6 +4,12 @@ All notable changes to this project are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versions follow [Semantic Versioning](https://semver.org/).
 Per-release notes are in [docs/releases/](docs/releases/).
 
+## [1.0.0-rc2] - 2026-11-19 (release candidate)
+
+### Added
+- The single jar is published as its own release asset (`dooh-security-scanner-<version>.jar` plus `.sha256`),
+  in addition to the two zips.
+
 ## [1.0.0-rc1] - 2026-11-18 (release candidate)
 
 ### Added
@@ -56,4 +62,5 @@ Per-release notes are in [docs/releases/](docs/releases/).
 ### Removed
 - Developer leftovers: `scanner.bat`, `config.txt`, `targets.txt`, `discovered_ips.txt`, Eclipse files.
 
+[1.0.0-rc2]: https://github.com/movingwalls/dooh-security-scanner/releases/tag/v1.0.0-rc2
 [1.0.0-rc1]: https://github.com/movingwalls/dooh-security-scanner/releases/tag/v1.0.0-rc1
