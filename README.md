@@ -6,7 +6,7 @@ NovaStar / Colorlight / Huidu / XiXun panels, ...) and reports **PASS**, **REVIE
 with the evidence and a recommended fix. It is built on [Nuclei](https://github.com/projectdiscovery/nuclei)
 and runs entirely on your own machine: no scan data is sent anywhere.
 
-> **Release candidate (1.0.0-rc2).** Static checks and unit tests pass; the vendor checks are being verified
+> **Release candidate (1.0.0-rc3).** Static checks and unit tests pass; the vendor checks are being verified
 > against real devices (see [docs/TESTING.md](docs/TESTING.md)). Treat PASS as "none of these checks matched",
 > not as proof that a screen is secure.
 

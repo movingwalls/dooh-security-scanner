@@ -4,7 +4,7 @@ All notable changes to this project are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versions follow [Semantic Versioning](https://semver.org/).
 Per-release notes are in [docs/releases/](docs/releases/).
 
-## [Unreleased]
+## [1.0.0-rc3] - 2026-11-19 (release candidate)
 
 ### Added
 - Nuclei is now downloaded as the **latest** release for the machine's OS and CPU (verified against the SHA-256
@@ -80,5 +80,6 @@ Per-release notes are in [docs/releases/](docs/releases/).
 ### Removed
 - Developer leftovers: `scanner.bat`, `config.txt`, `targets.txt`, `discovered_ips.txt`, Eclipse files.
 
+[1.0.0-rc3]: https://github.com/movingwalls/dooh-security-scanner/releases/tag/v1.0.0-rc3
 [1.0.0-rc2]: https://github.com/movingwalls/dooh-security-scanner/releases/tag/v1.0.0-rc2
 [1.0.0-rc1]: https://github.com/movingwalls/dooh-security-scanner/releases/tag/v1.0.0-rc1

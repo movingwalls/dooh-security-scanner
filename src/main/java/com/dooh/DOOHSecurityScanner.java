@@ -29,7 +29,7 @@ import java.util.stream.Stream;
  */
 public final class DOOHSecurityScanner {
 
-    static final String VERSION = "1.0.0-rc2";
+    static final String VERSION = "1.0.0-rc3";
 
     /** Hard-coded safety limits so low-power LED controllers and cellular links are not overloaded. */
     static final String[] SAFETY_FLAGS = {"-rate-limit", "10", "-c", "5", "-timeout", "4"};
