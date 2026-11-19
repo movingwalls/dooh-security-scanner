@@ -70,4 +70,4 @@ jobs:
         run: mvn -B -DskipTests package
 
       - name: Build and smoke-test the bundle
-        run: scripts/build-bundle.sh "${{ matrix.platform }}" "0.0.0-ci"
+        run: scripts/build-bundle.sh "${{ matrix.platform }}" "1.0.0-ci"
