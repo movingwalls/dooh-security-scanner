@@ -4,6 +4,33 @@ All notable changes to this project are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versions follow [Semantic Versioning](https://semver.org/).
 Per-release notes are in [docs/releases/](docs/releases/).
 
+## [1.0.0-rc3] - 2026-11-19 (release candidate)
+
+### Security
+- **The current folder is no longer searched for Nuclei or templates** (rc1 and rc2 ran any `nuclei`/`nuclei.exe`, and
+  loaded a `templates/` folder, found in the folder the scanner was started from, with the user's rights). Nuclei is
+  now looked up only next to the jar, in the scanner's cache and on absolute `PATH` entries, and runs only if its SHA-256
+  matches the official build (or, for a cached `--nuclei-version latest` install, the hash recorded at install). Anything
+  else is skipped with a notice. `--nuclei <path>` still runs exactly the file you name, with a warning.
+- The extracted templates are re-checked against the jar on every run; a changed, added or missing file is restored.
+- The extracted Nuclei executable is checked against a compiled-in SHA-256, in addition to the archive.
+- New tests run the real scanner with planted/tampered binaries (`PlantedBinaryTest`) and tampered templates.
+
+### Added
+- `--nuclei-version latest|x.y.z` downloads a newer Nuclei for this machine's OS/CPU, verified against the checksum published
+  with that release (the tested `3.4.10` stays the default). Downloads retry on connection failures and timeouts.
+- `scripts/platform-test.sh`: target-machine test (download, template validation, false-positive check, fresh-machine run).
+  CI runs it on Linux x64/arm64, macOS Intel/Apple Silicon and Windows, and the release workflow publishes nothing unless
+  all of them pass.
+
+### Changed
+- Self-contained bundles (own Java runtime, pinned Nuclei, templates) are now published for every mainstream
+  platform, each built and smoke-tested natively: `windows-x64`, `linux-x64`, `linux-arm64`, `macos-x64`
+  (Intel) and `macos-arm64` (Apple Silicon). Linux/macOS bundles are `.tar.gz`; Windows stays `.zip`.
+  The Windows asset is renamed `...-windows.zip` -> `...-windows-x64.zip`.
+- CI now builds and smoke-tests the bundle on all five platforms on every change, using the same
+  `scripts/build-bundle.sh` as the release.
+
 ## [1.0.0-rc2] - 2026-11-19 (release candidate)
 
 ### Added
@@ -62,5 +89,6 @@ Per-release notes are in [docs/releases/](docs/releases/).
 ### Removed
 - Developer leftovers: `scanner.bat`, `config.txt`, `targets.txt`, `discovered_ips.txt`, Eclipse files.
 
+[1.0.0-rc3]: https://github.com/movingwalls/dooh-security-scanner/releases/tag/v1.0.0-rc3
 [1.0.0-rc2]: https://github.com/movingwalls/dooh-security-scanner/releases/tag/v1.0.0-rc2
 [1.0.0-rc1]: https://github.com/movingwalls/dooh-security-scanner/releases/tag/v1.0.0-rc1

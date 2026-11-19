@@ -30,6 +30,7 @@ class NucleiInstallerTest {
     private HttpServer server;
     private byte[] zip;
     private String base;
+    private String checksumsFile = "";
 
     private static byte[] zipOf(String exeName, String content) throws IOException {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -49,7 +50,18 @@ class NucleiInstallerTest {
         zip = zipOf("nuclei", "#!/bin/sh\necho fake\n");
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", ex -> {
-            if (ex.getRequestURI().getPath().endsWith(NucleiInstaller.assetName("linux_amd64"))) {
+            String path = ex.getRequestURI().getPath();
+            if (path.equals("/latest")) {
+                ex.getResponseHeaders().add("Location", "https://github.com/x/y/releases/tag/v9.8.7");
+                ex.sendResponseHeaders(302, -1);
+            } else if (path.equals("/latest-broken")) {
+                ex.sendResponseHeaders(200, -1);
+            } else if (path.endsWith("nuclei_9.8.7_checksums.txt")) {
+                byte[] t = (checksumsFile).getBytes(StandardCharsets.UTF_8);
+                ex.sendResponseHeaders(200, t.length);
+                ex.getResponseBody().write(t);
+            } else if (path.endsWith(NucleiInstaller.assetName("9.8.7", "linux_amd64"))
+                    || path.endsWith(NucleiInstaller.assetName("linux_amd64"))) {
                 ex.sendResponseHeaders(200, zip.length);
                 ex.getResponseBody().write(zip);
             } else {
@@ -79,8 +91,9 @@ class NucleiInstallerTest {
         assertEquals("#!/bin/sh\necho fake\n", Files.readString(dest));
         assertFalse(Files.exists(tmp.resolve("bin").resolve("README.md")), "only the executable is extracted");
         try (var s = Files.list(tmp.resolve("bin"))) {
-            assertEquals(1, s.count(), "no temp files left behind");
+            assertEquals(2, s.count(), "only the executable and its recorded hash; no temp files left behind");
         }
+        assertEquals(sha(Files.readAllBytes(dest)), Files.readString(NucleiInstaller.recordFor(dest)).trim());
     }
 
     @Test
@@ -135,5 +148,123 @@ class NucleiInstallerTest {
             assertTrue(e.getValue().matches("[0-9a-f]{64}"), e.getKey());
         }
         assertNotNull(NucleiInstaller.platformKey("Linux", "amd64"));
+    }
+
+    @Test
+    void parsesChecksumFile() {
+        String h = "a".repeat(64);
+        String text = "bad  nuclei_1.0.0_linux_amd64.zip\n" + h + "  nuclei_1.0.0_linux_arm64.zip\n"
+                + h.toUpperCase() + "  nuclei_1.0.0_macOS_arm64.zip\n";
+        assertEquals(h, NucleiInstaller.parseChecksum(text, "nuclei_1.0.0_linux_arm64.zip"));
+        assertEquals(h, NucleiInstaller.parseChecksum(text, "nuclei_1.0.0_macOS_arm64.zip"), "normalised to lower case");
+        assertNull(NucleiInstaller.parseChecksum(text, "nuclei_1.0.0_linux_amd64.zip"), "malformed hash line ignored");
+        assertNull(NucleiInstaller.parseChecksum(text, "nuclei_1.0.0_windows_amd64.zip"));
+    }
+
+    @Test
+    void comparesAndExtractsVersions() {
+        assertTrue(NucleiInstaller.compareVersions("3.11.1", "3.4.10") > 0, "numeric, not alphabetical");
+        assertEquals(0, NucleiInstaller.compareVersions("3.4.10", "3.4.10"));
+        assertTrue(NucleiInstaller.compareVersions("3.4.9", "3.4.10") < 0);
+        assertEquals("3.11.1", NucleiInstaller.versionIn("[INF] Nuclei Engine Version: v3.11.1\n"));
+        assertNull(NucleiInstaller.versionIn("nothing here"));
+        assertTrue(NucleiInstaller.isPlainVersion("3.4.10"));
+        assertFalse(NucleiInstaller.isPlainVersion("../../etc"));
+        assertFalse(NucleiInstaller.isPlainVersion("3.4.10-beta"));
+        assertFalse(NucleiInstaller.isPlainVersion(null));
+    }
+
+    @Test
+    void resolvesLatestVersionFromRedirect() throws Exception {
+        assertEquals("9.8.7", NucleiInstaller.resolveLatestVersion(base + "latest"));
+        assertThrows(IOException.class, () -> NucleiInstaller.resolveLatestVersion(base + "latest-broken"));
+        assertThrows(IOException.class, () -> NucleiInstaller.resolveLatestVersion("http://example.com/latest"));
+    }
+
+    @Test
+    void installsLatestUsingTheReleasesOwnChecksum() throws Exception {
+        checksumsFile = "ignored  other.zip\n" + sha(zip) + "  " + NucleiInstaller.assetName("9.8.7", "linux_amd64") + "\n";
+        String version = NucleiInstaller.resolveLatestVersion(base + "latest");
+        String hash = NucleiInstaller.fetchChecksum(base, version, "linux_amd64");
+        Path dest = tmp.resolve("latest").resolve("nuclei");
+        NucleiInstaller.install(base, version, "linux_amd64", Map.of("linux_amd64", hash), dest);
+        assertEquals("#!/bin/sh\necho fake\n", Files.readString(dest));
+    }
+
+    @Test
+    void latestWithWrongChecksumIsRejected() throws Exception {
+        checksumsFile = "0".repeat(64) + "  " + NucleiInstaller.assetName("9.8.7", "linux_amd64") + "\n";
+        String hash = NucleiInstaller.fetchChecksum(base, "9.8.7", "linux_amd64");
+        Path dest = tmp.resolve("l2").resolve("nuclei");
+        IOException ex = assertThrows(IOException.class,
+                () -> NucleiInstaller.install(base, "9.8.7", "linux_amd64", Map.of("linux_amd64", hash), dest));
+        assertTrue(ex.getMessage().contains("Checksum mismatch"));
+        assertFalse(Files.exists(dest));
+    }
+
+    @Test
+    void missingChecksumEntryFails() {
+        checksumsFile = "";
+        assertThrows(IOException.class, () -> NucleiInstaller.fetchChecksum(base, "9.8.7", "linux_amd64"));
+    }
+
+    @Test
+    void rejectsUnsafeVersionStrings() {
+        assertThrows(IOException.class, () -> NucleiInstaller.installVersion("../evil"));
+    }
+
+    @Test
+    void rejectsExtractedExecutableThatIsNotTheOfficialBuild() throws Exception {
+        Path dest = tmp.resolve("b5").resolve("nuclei");
+        IOException ex = assertThrows(IOException.class, () -> NucleiInstaller.install(
+                base, NucleiInstaller.VERSION, "linux_amd64", Map.of("linux_amd64", sha(zip)), dest, "0".repeat(64)));
+        assertTrue(ex.getMessage().contains("does not match the official build"));
+        assertFalse(Files.exists(dest), "nothing is kept");
+    }
+
+    @Test
+    void everyPinnedArchiveHasAPinnedExecutableHash() {
+        assertEquals(NucleiInstaller.SHA256.keySet(), NucleiInstaller.BINARY_SHA256.keySet());
+        for (String h : NucleiInstaller.BINARY_SHA256.values()) {
+            assertTrue(h.matches("[0-9a-f]{64}"));
+        }
+    }
+
+    @Test
+    void trustsOnlyOfficialBuildsOrRecordedCacheCopies() throws Exception {
+        Path cache = tmp.resolve("cache").resolve("nuclei");
+        Path official = Files.write(tmp.resolve("official"), "official build".getBytes(StandardCharsets.UTF_8));
+        Map<String, String> pinned = Map.of("linux_amd64", NucleiInstaller.sha256(official));
+
+        // planted file that is not the official build, even with a hash file beside it: not trusted outside the cache
+        Path planted = Files.write(tmp.resolve("planted"), "evil".getBytes(StandardCharsets.UTF_8));
+        Files.writeString(NucleiInstaller.recordFor(planted), NucleiInstaller.sha256(planted));
+        assertFalse(NucleiInstaller.isTrusted(planted, "linux_amd64", pinned, cache));
+
+        assertTrue(NucleiInstaller.isTrusted(official, "linux_amd64", pinned, cache), "the official build is trusted anywhere");
+        assertFalse(NucleiInstaller.isTrusted(official, null, pinned, cache), "unknown platform: nothing is official");
+        assertFalse(NucleiInstaller.isTrusted(tmp.resolve("missing"), "linux_amd64", pinned, cache));
+
+        // a copy this scanner installed into its cache is trusted while its recorded hash matches...
+        Path cached = Files.write(Files.createDirectories(cache.resolve("9.9.9")).resolve("nuclei"), "latest build".getBytes(StandardCharsets.UTF_8));
+        Files.writeString(NucleiInstaller.recordFor(cached), NucleiInstaller.sha256(cached));
+        assertTrue(NucleiInstaller.isTrusted(cached, "linux_amd64", pinned, cache));
+        // ...and not once the file is tampered with
+        Files.writeString(cached, "tampered");
+        assertFalse(NucleiInstaller.isTrusted(cached, "linux_amd64", pinned, cache));
+    }
+
+    @Test
+    void pathSearchSkipsRelativeEntriesAndTheCurrentFolder() throws Exception {
+        String exe = NucleiInstaller.exeName();
+        Path cwd = Files.createDirectories(tmp.resolve("work"));
+        Path good = Files.createDirectories(tmp.resolve("good"));
+        Files.writeString(cwd.resolve(exe), "x");
+        Files.writeString(good.resolve(exe), "x");
+        Files.writeString(Files.createDirectories(tmp.resolve("rel")).resolve(exe), "x");
+        String sep = java.io.File.pathSeparator;
+        String path = String.join(sep, "", ".", "rel", cwd.toString(), good.toString());
+        assertEquals(java.util.List.of(good.resolve(exe)), NucleiInstaller.pathCandidates(path, cwd));
+        assertTrue(NucleiInstaller.pathCandidates(null, cwd).isEmpty());
     }
 }

@@ -2,17 +2,29 @@ name: CI
 
 on:
   push:
+    branches: ["**"]   # tags are handled by the Release workflow, which calls this file as its gate
   pull_request:
   workflow_dispatch:
-
-env:
-  NUCLEI_VERSION: "3.4.10"
-  # sha256 of nuclei_3.4.10_linux_amd64.zip, from the official release checksums file
-  NUCLEI_SHA256: "234c12cc5288af071abdcd6f854245b6067345556e1235cf96b76725c1004357"
+  workflow_call:   # the Release workflow runs this whole file as its gate
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  platform-test:
+    # Target-machine tests: the scanner is run the way a user would, on every supported OS and CPU
+    # (including macOS Intel and Apple Silicon). See scripts/platform-test.sh for what is checked.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux-x64,   os: ubuntu-latest }
+          - { platform: linux-arm64, os: ubuntu-24.04-arm }
+          - { platform: macos-x64,   os: macos-15-intel }
+          - { platform: macos-arm64, os: macos-latest }
+          - { platform: windows-x64, os: windows-latest }
+    name: platform-test (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
@@ -25,24 +37,23 @@ jobs:
       - name: Build and unit tests
         run: mvn -B verify
 
-      - name: Install pinned Nuclei
-        run: |
-          mkdir -p "$RUNNER_TEMP/nuclei"
-          curl -sSL -o "$RUNNER_TEMP/nuclei.zip" \
-            "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_amd64.zip"
-          echo "${NUCLEI_SHA256}  $RUNNER_TEMP/nuclei.zip" | sha256sum -c -
-          unzip -q "$RUNNER_TEMP/nuclei.zip" -d "$RUNNER_TEMP/nuclei"
-          echo "$RUNNER_TEMP/nuclei" >> "$GITHUB_PATH"
+      - name: Target-machine test (auto-download Nuclei, validate templates, false-positive check, fresh-machine run)
+        run: scripts/platform-test.sh
 
-      - name: Validate every template loads
-        run: nuclei -validate -t templates -nc -duc
-
-      - name: Plain web server must PASS (false-positive check)
-        run: sudo env "PATH=$PATH" NUCLEI="$(which nuclei)" scripts/false-positive-check.sh
-
-  windows-bundle:
-    # Proves the self-contained Windows build (native .exe + bundled Java runtime) works on every change.
-    runs-on: windows-latest
+  bundle:
+    name: bundle (${{ matrix.platform }})
+    # Proves the self-contained bundle (native launcher + bundled Java runtime + Nuclei) builds and runs on every
+    # supported OS and CPU on every change. The same script produces the release assets.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: windows-x64, os: windows-latest }
+          - { platform: linux-x64,   os: ubuntu-latest }
+          - { platform: linux-arm64, os: ubuntu-24.04-arm }
+          - { platform: macos-x64,   os: macos-15-intel }
+          - { platform: macos-arm64, os: macos-latest }
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash
@@ -58,21 +69,5 @@ jobs:
       - name: Build jar
         run: mvn -B -DskipTests package
 
-      - name: Build self-contained app
-        run: |
-          mkdir input
-          cp target/dooh-security-scanner.jar input/
-          cp -r templates input/
-          jpackage --type app-image --name dooh-security-scanner \
-            --input input --main-jar dooh-security-scanner.jar \
-            --main-class com.dooh.DOOHSecurityScanner \
-            --win-console --app-version 1.0.0 --vendor "Moving Walls" --dest dist
-
-      - name: Smoke test the executable
-        run: |
-          dist/dooh-security-scanner/dooh-security-scanner.exe --version
-          dist/dooh-security-scanner/dooh-security-scanner.exe --help | head -5
-          # no Nuclei present and downloads forbidden => must fail cleanly with exit code 3, not crash
-          set +e
-          dist/dooh-security-scanner/dooh-security-scanner.exe -h 127.0.0.1 --yes --offline --nuclei missing.exe
-          test $? -eq 3
+      - name: Build and smoke-test the bundle
+        run: scripts/build-bundle.sh "${{ matrix.platform }}" "1.0.0-ci"

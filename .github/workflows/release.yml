@@ -1,10 +1,13 @@
 name: Release
 
-# Publishes a GitHub Release when a version tag such as v1.0.0 is pushed.
+# Publishes a GitHub Release when a version tag such as v1.0.0 is pushed, but only after the CI gate (the 'gate'
+# job: tests on Linux x64/arm64, macOS Intel/Apple Silicon and Windows) has passed.
 # Assets:
 #   dooh-security-scanner-<version>.zip          portable: jar + templates + launchers (needs Java 17)
 #   dooh-security-scanner-<version>.jar          the single jar on its own (templates packaged inside; needs Java 17)
-#   dooh-security-scanner-<version>-windows.zip  self-contained: .exe with its own Java runtime + nuclei.exe + templates
+#   dooh-security-scanner-<version>-<platform>.{zip|tar.gz}  self-contained: native launcher + its own Java runtime +
+#       pinned Nuclei + templates (no Java install needed), built natively for each of:
+#       windows-x64, linux-x64, linux-arm64, macos-x64 (Intel), macos-arm64 (Apple Silicon)
 # Each asset has a .sha256 file next to it.
 
 on:
@@ -15,13 +18,14 @@ on:
 permissions:
   contents: write
 
-env:
-  NUCLEI_VERSION: "3.4.10"
-  # sha256 of nuclei_3.4.10_windows_amd64.zip, from the official release checksums file
-  NUCLEI_WINDOWS_SHA256: "7de765bdd73f1c8ec577e82df8196b3971ecd9efc7061a7cab931bc1a8055c68"
-
 jobs:
+  gate:
+    # Nothing is published unless the full CI passes first: unit tests, the target-machine tests on
+    # Linux x64/arm64, macOS Intel/Apple Silicon and Windows, and the bundle builds on all five platforms.
+    uses: ./.github/workflows/ci.yml
+
   portable:
+    needs: gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,9 +65,20 @@ jobs:
             dooh-security-scanner-*.zip dooh-security-scanner-*.zip.sha256 \
             dooh-security-scanner-*.jar dooh-security-scanner-*.jar.sha256
 
-  windows:
+  bundle:
+    # jpackage cannot cross-compile, so each bundle is built (and smoke-tested) on a runner of its own OS/CPU.
+    # scripts/build-bundle.sh does the work and takes the pinned Nuclei checksum from NucleiInstaller.java.
     needs: portable
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: windows-x64, os: windows-latest }
+          - { platform: linux-x64,   os: ubuntu-latest }
+          - { platform: linux-arm64, os: ubuntu-24.04-arm }
+          - { platform: macos-x64,   os: macos-15-intel }
+          - { platform: macos-arm64, os: macos-latest }
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash
@@ -79,45 +94,10 @@ jobs:
       - name: Build (tests already ran in the portable job)
         run: mvn -B -DskipTests package
 
-      - name: Download pinned Nuclei and verify checksum
-        run: |
-          curl -sSL -o nuclei.zip \
-            "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_windows_amd64.zip"
-          echo "${NUCLEI_WINDOWS_SHA256}  nuclei.zip" | sha256sum -c -
-          mkdir nuclei-bin && unzip -q nuclei.zip -d nuclei-bin
-
-      - name: Assemble input folder
-        run: |
-          mkdir input
-          cp target/dooh-security-scanner.jar input/
-          cp -r templates input/
-          cp nuclei-bin/nuclei.exe input/
-          cp LICENSE NOTICE THIRD_PARTY_LICENSES.md input/
-
-      - name: Build self-contained app (bundled Java runtime)
-        run: |
-          jpackage --type app-image --name dooh-security-scanner \
-            --input input --main-jar dooh-security-scanner.jar \
-            --main-class com.dooh.DOOHSecurityScanner \
-            --win-console --app-version 1.0.0 --vendor "Moving Walls" \
-            --dest dist
-
-      - name: Package
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          cp README.md SECURITY.md CHANGELOG.md targets.example.txt dooh-scan.bat dooh-security-scanner*.bat dist/dooh-security-scanner/
-          cp -r docs dist/dooh-security-scanner/
-          cd dist
-          7z a "../dooh-security-scanner-${VERSION}-windows.zip" dooh-security-scanner
-          cd ..
-          sha256sum "dooh-security-scanner-${VERSION}-windows.zip" > "dooh-security-scanner-${VERSION}-windows.zip.sha256"
-
-      - name: Smoke test the executable
-        run: dist/dooh-security-scanner/dooh-security-scanner.exe --version
+      - name: Build, smoke-test and archive the bundle
+        run: scripts/build-bundle.sh "${{ matrix.platform }}" "${GITHUB_REF_NAME#v}"
 
       - name: Upload to release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release upload "$GITHUB_REF_NAME" \
-            dooh-security-scanner-*-windows.zip dooh-security-scanner-*-windows.zip.sha256
+        run: gh release upload "$GITHUB_REF_NAME" dist/dooh-security-scanner-*-${{ matrix.platform }}.*

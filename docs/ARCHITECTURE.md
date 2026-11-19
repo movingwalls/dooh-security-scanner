@@ -19,7 +19,7 @@ targets (-t file | -h list | --discover)
 |---|---|
 | `DOOHSecurityScanner` | CLI, orchestration, exit codes |
 | `TargetParser` | input validation; the only gate for what reaches Nuclei |
-| `NucleiInstaller` | pinned-version, checksum-verified download from the official GitHub release |
+| `NucleiInstaller` | downloads the tested Nuclei for this OS/CPU from the official GitHub release, verified against compiled-in SHA-256 values (archive and executable); optionally the latest release; decides which Nuclei is trusted to run |
 | `TemplateStore` | extracts the templates packaged in the jar |
 | `LocalArpScanner` | optional LAN discovery (real subnet, no VPN/virtual adapters, no multicast) |
 | `DOOHReportPrinter` | PASS/REVIEW/FAIL classification and text/JSON/HTML output |
@@ -38,16 +38,17 @@ targets (-t file | -h list | --discover)
 reachable and should be checked); `PASS` = no finding; `ERROR` = the run was unreliable, no verdict given.
 Exit codes: 0 no FAIL, 1 FAIL present, 2 usage/invalid targets, 3 ERROR.
 
-## Updating the pinned Nuclei version
+## Which Nuclei is run
+Without `--nuclei`, candidates are looked up only in: the folder of the jar, the per-user cache, and absolute `PATH`
+entries. The current folder and relative `PATH` entries are never searched. A candidate runs only if its SHA-256 equals
+`NucleiInstaller.BINARY_SHA256` for this platform (the official build), or it is in the cache and matches the hash
+recorded when the scanner installed it (used for `--nuclei-version latest`; this detects later modification but, being
+recorded locally, is not a signature). Others are skipped with a notice. `--nuclei <path>` runs exactly that file.
+`PlantedBinaryTest` runs the real scanner with planted and tampered binaries to prove this.
+
+## Updating the tested Nuclei version
+`NucleiInstaller.VERSION` is the version the scanner is tested with, installs by default, and bundles in the release packages.
 1. Read the official `nuclei_<ver>_checksums.txt` from the release page.
-2. Update `NucleiInstaller.VERSION` and the `SHA256` table, the `env:` values in `.github/workflows/*.yml`, and the README.
-3. Run `nuclei -validate -t templates` and the false-positive check with the new version.
-
-## Template conventions
-See [CONTRIBUTING.md](../CONTRIBUTING.md). Every template has an `info.remediation`, a `metadata.owasp-iot`
-mapping and a vendor-specific matcher; credential-sending templates carry the `intrusive` tag.
-
-## Not included (by design)
-- No generic "HTTP 200" detection template: it matches every web server.
-- No network discovery engine beyond the optional local-LAN helper; owners supply their own targets.
-- No cloud service or telemetry.
+2. Update `VERSION`, the `SHA256` table (archives) and the `BINARY_SHA256` table (SHA-256 of the extracted `nuclei` / `nuclei.exe`
+   of each archive). The release workflow and `scripts/build-bundle.sh` read them from there.
+3. Run `scripts/platform-test.sh` (CI does this on every platform); it checks the templates against both the tested and the latest Nuclei.

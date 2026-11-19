@@ -6,7 +6,7 @@ NovaStar / Colorlight / Huidu / XiXun panels, ...) and reports **PASS**, **REVIE
 with the evidence and a recommended fix. It is built on [Nuclei](https://github.com/projectdiscovery/nuclei)
 and runs entirely on your own machine: no scan data is sent anywhere.
 
-> **Release candidate (1.0.0-rc2).** Static checks and unit tests pass; the vendor checks are being verified
+> **Release candidate (1.0.0-rc3).** Static checks and unit tests pass; the vendor checks are being verified
 > against real devices (see [docs/TESTING.md](docs/TESTING.md)). Treat PASS as "none of these checks matched",
 > not as proof that a screen is secure.
 
@@ -16,28 +16,54 @@ Only scan IP addresses and devices that **you own or are explicitly authorised, 
 Unauthorised scanning may be illegal. The scanner asks you to confirm this before every run. See
 [docs/LEGAL.md](docs/LEGAL.md). Moving Walls is not affiliated with any of the device vendors named here.
 
-## Quick start (Windows)
+## Quick start
 
-1. Download `dooh-security-scanner-<version>-windows.zip` from the **Releases** page and extract it.
-   It includes everything: the scanner, its own Java runtime, Nuclei and the templates.
-2. If your antivirus blocks `nuclei.exe` (security tools are often flagged), add `nuclei.exe` to the
+Pick the download for your computer from the **Releases** page. Each one includes everything: the scanner,
+its own Java runtime (nothing to install), the tested Nuclei and the templates.
+
+| Your computer | Download |
+|---|---|
+| Windows 10/11, Intel/AMD (also runs on Windows-on-ARM through its built-in emulation) | `dooh-security-scanner-<version>-windows-x64.zip` |
+| Linux, Intel/AMD (x86-64) | `dooh-security-scanner-<version>-linux-x64.tar.gz` |
+| Linux, ARM (64-bit: Raspberry Pi 4/5, AWS Graviton, ...) | `dooh-security-scanner-<version>-linux-arm64.tar.gz` |
+| Mac, Intel | `dooh-security-scanner-<version>-macos-x64.tar.gz` |
+| Mac, Apple Silicon (M1 and later) | `dooh-security-scanner-<version>-macos-arm64.tar.gz` |
+
+Not sure which one? On Linux/macOS run `uname -m`: `x86_64` means x64, `arm64` or `aarch64` means arm64.
+
+**Windows**
+
+1. Extract the zip. If your antivirus blocks `nuclei.exe` (security tools are often flagged), add it to the
    antivirus exception/allowlist.
-3. Copy `targets.example.txt` to `targets.txt` and list your addresses, one per line.
-4. Open Command Prompt or PowerShell in the extracted folder and run:
-
-```
-dooh-security-scanner.exe -t targets.txt
-```
+2. Copy `targets.example.txt` to `targets.txt` and list your addresses, one per line.
+3. Open Command Prompt or PowerShell in the extracted folder and run `dooh-security-scanner.exe -t targets.txt`.
 
 Prefer double-clicking? Use `dooh-security-scanner-easy.bat` (scans `targets.txt`; creates it from the example
 on first run) or `dooh-security-scanner-discover-easy.bat` (finds devices on your own network first).
 
-Verify the download first with the `.sha256` file next to it (`certutil -hashfile <zip> SHA256`).
+**Linux and macOS**
 
-## Other platforms and the single jar
+```
+tar -xzf dooh-security-scanner-<version>-<platform>.tar.gz
+cd dooh-security-scanner-<version>
+cp targets.example.txt targets.txt        # then edit it
+./dooh-security-scanner -t targets.txt
+```
 
-**Officially supported: Windows 10/11 (64-bit).** Linux and macOS work on a best-effort basis.
+On **macOS**, a downloaded app is quarantined by Gatekeeper because these builds are not signed with an Apple
+developer certificate. Clear that once after extracting, then run as above:
 
+```
+xattr -dr com.apple.quarantine dooh-security-scanner-<version>
+```
+
+Verify every download first with the `.sha256` file next to it (`certutil -hashfile <file> SHA256` on Windows,
+`shasum -a 256 -c <file>.sha256` on Linux/macOS).
+
+## Any other system: the single jar
+
+The scanner is plain Java, so it runs anywhere Java 17+ does (any OS, any CPU), for example 32-bit ARM or
+Windows-on-ARM with an ARM Java.
 Download `dooh-security-scanner-<version>.zip` (or just `dooh-security-scanner-<version>.jar` from the same
 Releases page), install **Java 17+**, then:
 
@@ -47,14 +73,20 @@ java -jar dooh-security-scanner.jar -t targets.txt     # use the downloaded jar'
 
 You do **not** need to install Nuclei or copy the templates yourself:
 
-- **Nuclei is downloaded automatically** the first time it is needed, after you approve it. The scanner fetches
-  the pinned release (`v3.4.10`) from ProjectDiscovery's official GitHub page, checks it against a SHA-256
-  checksum built into the scanner (the download is discarded if it does not match) and stores it in
-  `~/.dooh-security-scanner/` (on Windows: `C:\Users\<you>\.dooh-security-scanner\`). Use `--yes` to approve
-  in scripts, `--offline` to forbid downloads, or `--install-nuclei` to just fetch it now.
-  If you prefer, put your own Nuclei next to the jar, on `PATH`, or pass `--nuclei <path>`.
-- **The templates are packaged inside the jar** and extracted automatically. A `templates/` folder next to the
-  jar (or `--templates <dir>`) takes precedence, which is handy for testing your own templates.
+- **Nuclei is downloaded automatically** the first time it is needed, after you approve it. The scanner picks the
+  build for your OS and CPU and fetches the tested release (`v3.4.10`) from ProjectDiscovery's official GitHub page,
+  checking it against SHA-256 checksums built into the scanner (the download is discarded if they do not match).
+  It is stored in `~/.dooh-security-scanner/` (on Windows: `C:\Users\<you>\.dooh-security-scanner\`).
+  Use `--yes` to approve in scripts, `--offline` to forbid downloads, `--install-nuclei` to fetch it now, or
+  `--nuclei-version latest` (or an exact version) to use a newer release; its checksum then comes from that release's
+  own published checksums, which protects the download but not against a compromised release.
+- **Only the official Nuclei is run automatically.** A Nuclei found next to the jar, in the cache or on `PATH` is used
+  only if it matches the official build's SHA-256 (checked on every run); anything else is skipped with a notice.
+  The current folder is never searched, so a file planted in, say, your Downloads folder is never executed.
+  `--nuclei <path>` runs exactly the file you name (with a warning if it is not the official build).
+- **The templates are packaged inside the jar**, extracted automatically and re-checked against the jar on every run
+  (a changed, added or missing file triggers a clean restore). A `templates/` folder in the current folder is ignored;
+  use `--templates <dir>` to test your own templates.
 
 ## Using it
 
@@ -73,8 +105,9 @@ Anything else is rejected before anything runs.
 | `-h, --hosts <list>` | comma-separated targets |
 | `--discover` | find devices on the local network (shows the network, asks to confirm) |
 | `--intrusive` | also try vendor default passwords. **Only with the owner's written consent** |
-| `--templates <dir>`, `--nuclei <path>`, `--out <dir>` | locations |
-| `--install-nuclei` | download and verify Nuclei, then exit |
+| `--templates <dir>`, `--nuclei <path>`, `--out <dir>` | locations (`--nuclei` runs exactly that file) |
+| `--install-nuclei` | download and verify Nuclei, then exit (with `--nuclei-version latest`: update to the newest) |
+| `--nuclei-version <v>` | use/download `latest` or an exact version instead of the tested `3.4.10` |
 | `--offline` | never download anything |
 | `-y, --yes` | skip prompts (you confirm you are authorised, and approve the Nuclei download) |
 | `--version`, `--help` | version and usage |
@@ -138,8 +171,8 @@ scripts/false-positive-check.sh  # a plain web server must PASS (needs python3, 
 ```
 
 More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Releases are made by pushing a `v*` tag
-(`git tag v1.0.0 && git push origin v1.0.0`); GitHub Actions builds, tests, and publishes both zips with
-checksums. Tags containing a `-` (such as `v1.0.0-rc1`) are published as pre-releases.
+(`git tag v1.0.0 && git push origin v1.0.0`); GitHub Actions builds, tests, and publishes the portable zip, the jar and a
+self-contained bundle for each of Windows x64, Linux x64/arm64 and macOS x64/arm64, with checksums. Tags containing a `-` (such as `v1.0.0-rc1`) are published as pre-releases.
 
 ## Contributing, security, licence
 
