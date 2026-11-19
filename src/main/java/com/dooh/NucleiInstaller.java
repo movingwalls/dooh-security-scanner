@@ -24,15 +24,17 @@ import java.util.zip.ZipInputStream;
 /**
  * Downloads Nuclei from ProjectDiscovery's official GitHub releases, for the machine it runs on.
  *
- * <p>By default the <em>latest</em> release is installed: its version is read from the redirect of
- * {@code github.com/projectdiscovery/nuclei/releases/latest} and its SHA-256 from the checksums file that
- * ProjectDiscovery publishes with that release. If that lookup fails, the tested version ({@link #VERSION})
- * is installed instead, checked against the SHA-256 values compiled into this class.
+ * <p>By default the tested version ({@link #VERSION}) is installed, checked against SHA-256 values compiled into
+ * this class: first the archive (before anything is extracted), then the extracted executable. On request
+ * ({@code --nuclei-version latest}) the latest release is installed instead: its version is read from the redirect
+ * of {@code github.com/projectdiscovery/nuclei/releases/latest} and its SHA-256 from the checksums file published
+ * with that release. That protects against corrupted or tampered downloads in transit, but not against a
+ * compromised release, which is why it is opt-in.
  *
- * <p>Safety: HTTPS only, the archive is verified <em>before</em> anything is extracted, only the single
- * Nuclei executable is extracted, and version strings are validated before they reach a URL or a path.
- * A checksum fetched from the same release protects against corrupted or tampered downloads in transit, but
- * not against a compromised release; the compiled-in values for {@link #VERSION} do. Nothing is executed here.
+ * <p>Before the scanner runs any Nuclei it found by itself it calls {@link #isTrusted}: the executable must match
+ * the compiled-in SHA-256 of the official build, or be a copy this scanner installed into its own cache and
+ * recorded the hash of. HTTPS only, only the single executable is extracted, and version strings are validated
+ * before they reach a URL or a path. Nothing is executed here.
  */
 final class NucleiInstaller {
 
@@ -49,6 +51,17 @@ final class NucleiInstaller {
             "macOS_arm64", "e077705580bfa291cd237f3613e97d0057092fc8398e049bdd03344961119eb7",
             "windows_amd64", "7de765bdd73f1c8ec577e82df8196b3971ecd9efc7061a7cab931bc1a8055c68",
             "windows_386", "2a4cb6e8042437bb65c55c0d575951f9f6dcc3e31c88a5cfaa427c9af4c9e746");
+
+    /** SHA-256 of the extracted Nuclei executable inside each archive above (nuclei / nuclei.exe). */
+    static final Map<String, String> BINARY_SHA256 = Map.of(
+            "linux_amd64", "794b5033f3e7b40b23bcf8a4e1c886d16275e0be2aaa19f0d8716a7bcb9e1489",
+            "linux_arm64", "4db94b2dd84dbe1ab7a9e0939b93708c7ece9fc811a25dab8e2052e34f23f68c",
+            "linux_386", "ae0d5b52e9e666c3c52c6d09ce1fc43d437958b9bccf0c0dacd377fb2ad047ce",
+            "linux_arm", "dd644f1d8223641729b1b9dc71279696bf2d2bc8c8fcfa9f61bcba203cd093b0",
+            "macOS_amd64", "bdd71dfe0aa66a38190a109f4828c739f1af2560bb2be3e528fb071e1adece2e",
+            "macOS_arm64", "d5e6c57a0d0df4c598c9968dba497b945dc084e2ec7ee213995ee316f5081020",
+            "windows_amd64", "91b64730daa83b29ba3a6d4e918b195ea7bc2da1f13132bb8d7cb33a8d691f4a",
+            "windows_386", "f44da79e0fd5f310536afe6383aa4c224cd845096e0644368427dd13151eba86");
 
     static final String OFFICIAL_BASE = releaseBase(VERSION);
 
@@ -108,21 +121,84 @@ final class NucleiInstaller {
         return 0;
     }
 
-    /** The highest Nuclei version already installed in the per-user cache, or {@code null}. */
-    static Path newestInstalled() {
+    /** Every Nuclei installed in the per-user cache by this scanner, highest version first. */
+    static java.util.List<Path> installedBinaries() {
         Path dir = cacheRoot().resolve("nuclei");
         if (!Files.isDirectory(dir)) {
-            return null;
+            return java.util.List.of();
         }
         try (Stream<Path> s = Files.list(dir)) {
             return s.filter(d -> isPlainVersion(d.getFileName().toString()))
-                    .filter(d -> Files.isRegularFile(d.resolve(exeName())))
-                    .max((a, b) -> compareVersions(a.getFileName().toString(), b.getFileName().toString()))
+                    .sorted((a, b) -> compareVersions(b.getFileName().toString(), a.getFileName().toString()))
                     .map(d -> d.resolve(exeName()))
-                    .orElse(null);
+                    .filter(Files::isRegularFile)
+                    .collect(java.util.stream.Collectors.toList());
         } catch (IOException e) {
-            return null;
+            return java.util.List.of();
         }
+    }
+
+    /** Where the hash recorded at install time lives for {@code exe}. */
+    static Path recordFor(Path exe) {
+        return exe.resolveSibling(exe.getFileName() + ".sha256");
+    }
+
+    /**
+     * Whether the scanner may run this Nuclei without being told to. True only if the executable is byte-for-byte
+     * the official build whose SHA-256 is compiled into this class, or a copy this scanner installed into its own
+     * cache folder whose recorded hash still matches. A file merely sitting in the working folder, in Downloads or
+     * next to the jar is never trusted by name.
+     */
+    static boolean isTrusted(Path exe) {
+        return isTrusted(exe, platformKey(), BINARY_SHA256, cacheRoot().resolve("nuclei"));
+    }
+
+    static boolean isTrusted(Path exe, String key, Map<String, String> official, Path cacheNucleiDir) {
+        try {
+            if (!Files.isRegularFile(exe)) {
+                return false;
+            }
+            String actual = sha256(exe);
+            if (key != null && actual.equalsIgnoreCase(official.get(key))) {
+                return true;
+            }
+            Path record = recordFor(exe);
+            boolean inCache = exe.toAbsolutePath().normalize().startsWith(cacheNucleiDir.toAbsolutePath().normalize());
+            return inCache && Files.isRegularFile(record) && Files.readString(record).trim().equalsIgnoreCase(actual);
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Nuclei executables found on {@code pathEnv}. Relative and empty entries (which mean "the current folder")
+     * and the current folder itself are skipped, so a planted file in the folder the user ran from is never found.
+     */
+    static java.util.List<Path> pathCandidates(String pathEnv, Path cwd) {
+        java.util.List<Path> found = new java.util.ArrayList<>();
+        if (pathEnv == null) {
+            return found;
+        }
+        Path here = cwd.toAbsolutePath().normalize();
+        for (String entry : pathEnv.split(java.io.File.pathSeparator)) {
+            if (entry.isBlank()) {
+                continue;
+            }
+            Path dir;
+            try {
+                dir = Paths.get(entry.strip());
+            } catch (RuntimeException e) {
+                continue;
+            }
+            if (!dir.isAbsolute() || dir.normalize().equals(here)) {
+                continue;
+            }
+            Path candidate = dir.resolve(exeName());
+            if (Files.isRegularFile(candidate)) {
+                found.add(candidate);
+            }
+        }
+        return found;
     }
 
     /** Extracts {@code 3.11.1} from text such as {@code Nuclei Engine Version: v3.11.1}; {@code null} if absent. */
@@ -175,7 +251,7 @@ final class NucleiInstaller {
         if (key == null) {
             throw unsupported();
         }
-        return install(OFFICIAL_BASE, VERSION, key, SHA256, installedBinary());
+        return install(OFFICIAL_BASE, VERSION, key, SHA256, installedBinary(), BINARY_SHA256.get(key));
     }
 
     /**
@@ -285,11 +361,17 @@ final class NucleiInstaller {
 
     /** Test seam for the tested version: base URL, hash table and destination are parameters. */
     static Path install(String baseUrl, String key, Map<String, String> hashes, Path destination) throws IOException {
-        return install(baseUrl, VERSION, key, hashes, destination);
+        return install(baseUrl, VERSION, key, hashes, destination, null);
     }
 
     static Path install(String baseUrl, String version, String key, Map<String, String> hashes, Path destination)
             throws IOException {
+        return install(baseUrl, version, key, hashes, destination, null);
+    }
+
+    /** {@code expectedExeSha256}, when not null, is also checked against the extracted executable. */
+    static Path install(String baseUrl, String version, String key, Map<String, String> hashes, Path destination,
+                        String expectedExeSha256) throws IOException {
         String expected = hashes.get(key);
         if (expected == null) {
             throw new IOException("No checksum pinned for " + key);
@@ -307,10 +389,16 @@ final class NucleiInstaller {
                         + ", got " + actual + "). The download was discarded.");
             }
             extractBinary(archive, tmpBinary, destination.getFileName().toString());
+            String exeSha = sha256(tmpBinary);
+            if (expectedExeSha256 != null && !exeSha.equalsIgnoreCase(expectedExeSha256)) {
+                throw new IOException("The extracted Nuclei executable does not match the official build (expected "
+                        + expectedExeSha256 + ", got " + exeSha + "). It was discarded.");
+            }
             if (!isWindows()) {
                 tmpBinary.toFile().setExecutable(true, false);
             }
             Files.move(tmpBinary, destination, StandardCopyOption.REPLACE_EXISTING);
+            Files.writeString(recordFor(destination), exeSha + System.lineSeparator()); // checked again on every run
             return destination;
         } finally {
             Files.deleteIfExists(archive);

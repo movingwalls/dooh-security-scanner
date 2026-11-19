@@ -9,7 +9,8 @@
 #   2. that Nuclei runs and every template loads,
 #   3. (Linux/macOS) a plain web server is reported as PASS, i.e. no template matches too much
 #      (set SKIP_FALSE_POSITIVE=1 to skip this when you cannot bind port 80).
-# Finally it runs the scanner on a "fresh machine" (empty cache, no Nuclei on PATH) with no flags except --yes.
+# Finally it runs the scanner on a "fresh machine" (empty cache, no Nuclei on PATH) with no flags except --yes,
+# which downloads the tested Nuclei and scans with it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -45,7 +46,7 @@ for WANT in latest "$TESTED"; do
   esac
 done
 
-echo "== Fresh machine: empty cache, no flags except --yes (downloads the latest Nuclei, then scans)"
+echo "== Fresh machine: empty cache, no flags except --yes (downloads the tested Nuclei, then scans)"
 export DOOH_SCANNER_HOME="$BASE/fresh"
 set +e
 java -jar "$JAR" -h 127.0.0.1 --yes --out "$BASE/scans" </dev/null

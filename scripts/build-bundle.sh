@@ -28,7 +28,8 @@ esac
 
 JAVA_SRC=src/main/java/com/dooh/NucleiInstaller.java
 NUCLEI_VERSION="$(sed -nE 's/.*static final String VERSION = "([^"]+)".*/\1/p' "$JAVA_SRC")"
-NUCLEI_SHA256="$(sed -nE "s/.*\"${NUCLEI_KEY}\", *\"([0-9a-f]{64})\".*/\1/p" "$JAVA_SRC")"
+# the archive hashes are in the SHA256 map; BINARY_SHA256 (hashes of the extracted executables) uses the same keys
+NUCLEI_SHA256="$(sed -n '/Map<String, String> SHA256 = /,/);/p' "$JAVA_SRC" | sed -nE "s/.*\"${NUCLEI_KEY}\", *\"([0-9a-f]{64})\".*/\1/p")"
 [ -n "$NUCLEI_VERSION" ] && [ -n "$NUCLEI_SHA256" ] || { echo "Cannot read pinned Nuclei version/checksum for $NUCLEI_KEY from $JAVA_SRC" >&2; exit 1; }
 [ -f target/dooh-security-scanner.jar ] || { echo "target/dooh-security-scanner.jar not found; run: mvn -B package" >&2; exit 1; }
 
@@ -108,6 +109,15 @@ set +e
 RC=$?
 set -e
 [ "$RC" -eq 3 ] || { echo "Expected exit code 3 for a missing Nuclei, got $RC" >&2; exit 1; }
+# The scanner must find and TRUST the Nuclei shipped in the bundle (its SHA-256 must still match the official
+# build after packaging/signing) and scan with it: empty cache, downloads forbidden. Exit 0/1 = scanned.
+set +e
+DOOH_SCANNER_HOME="$WORK/empty-home" "$BIN" -h 127.0.0.1 --yes --offline --out "$WORK/smoke-scans" >"$WORK/smoke.log" 2>&1
+RC=$?
+set -e
+if [ "$RC" -ge 2 ] || grep -q "Skipping .*not the official Nuclei" "$WORK/smoke.log"; then
+  echo "The bundled Nuclei was not accepted or the scan failed (exit $RC):" >&2; cat "$WORK/smoke.log" >&2; exit 1
+fi
 # The bundled Nuclei must be the pinned one and must run on this CPU.
 "$(dirname "$(find "$FOLDER" -name "$EXE" -type f | head -1)")/$EXE" -version 2>&1 | grep -q "$NUCLEI_VERSION" \
   || { echo "Bundled Nuclei did not report version $NUCLEI_VERSION" >&2; exit 1; }

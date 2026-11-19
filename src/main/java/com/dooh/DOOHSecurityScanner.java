@@ -60,7 +60,8 @@ public final class DOOHSecurityScanner {
         boolean yes;
         boolean offline;
         boolean installOnly;
-        String nucleiVersion = "latest";
+        /** null = the tested version; "latest" or an exact version only when asked for. */
+        String nucleiVersion;
     }
 
     public static void main(String[] args) {
@@ -82,7 +83,9 @@ public final class DOOHSecurityScanner {
         try {
             // 0. --install-nuclei: fetch (or update to) the wanted Nuclei and exit.
             if (o.installOnly) {
-                String path = o.nuclei == null && !o.offline ? installNuclei(o) : locateNuclei(o);
+                // Asking for the latest means "update now"; otherwise reuse a trusted copy if there is one.
+                boolean update = "latest".equals(o.nucleiVersion) && o.nuclei == null && !o.offline;
+                String path = update ? installNuclei(o) : locateNuclei(o);
                 if (path == null) {
                     return 3;
                 }
@@ -274,48 +277,81 @@ public final class DOOHSecurityScanner {
     }
 
     /**
-     * Finds a working Nuclei: --nuclei, then next to the scanner, then the per-user cache, then PATH.
-     * If none is found, offers to download the pinned, checksum-verified release (--yes approves,
-     * --offline forbids). Returns {@code null} after printing an explanation when nothing works.
+     * Finds a Nuclei to run. With {@code --nuclei <path>} that exact file is used (the user chose it; a warning is
+     * printed when it is not the official build). Otherwise only <em>trusted</em> copies are considered, in this
+     * order: next to the scanner's jar, the scanner's own cache, then absolute {@code PATH} entries. The current
+     * folder is never searched. Trusted means it matches the official SHA-256 (see
+     * {@link NucleiInstaller#isTrusted}); anything else found is skipped with a notice. If nothing trusted is found,
+     * the official release is offered for download ({@code --yes} approves, {@code --offline} forbids). Returns
+     * {@code null} after printing an explanation when nothing works.
      */
     static String locateNuclei(Options o) {
-        List<String> candidates = new ArrayList<>();
         if (o.nuclei != null) {
-            candidates.add(o.nuclei);
-        } else {
-            for (Path dir : searchDirs()) {
-                Path c = dir.resolve(NucleiInstaller.exeName());
-                if (Files.isRegularFile(c)) {
-                    candidates.add(c.toString());
-                }
+            String version = nucleiVersionOutput(o.nuclei);
+            if (version == null) {
+                System.err.println("[ERROR] Nuclei does not run: " + o.nuclei);
+                return null;
             }
-            Path cached = NucleiInstaller.newestInstalled();
-            if (cached != null) {
-                candidates.add(cached.toString());
+            if (!NucleiInstaller.isTrusted(Paths.get(o.nuclei))) {
+                System.err.println("Warning: running the Nuclei you chose (" + o.nuclei + "); it was not checked against the"
+                        + " official build, so make sure you trust where it came from.");
             }
-            candidates.add(NucleiInstaller.exeName()); // PATH
+            warnIfOlder(version, o.nuclei);
+            return o.nuclei;
         }
-        for (String c : candidates) {
-            String version = nucleiVersionOutput(c);
+        for (Path c : candidateNuclei(o)) {
+            if (!NucleiInstaller.isTrusted(c)) {
+                System.err.println("Skipping " + c + ": it is not the official Nuclei build this scanner trusts.");
+                continue;
+            }
+            String version = nucleiVersionOutput(c.toString());
             if (version != null) {
-                String found = NucleiInstaller.versionIn(version);
-                if (found != null && NucleiInstaller.compareVersions(found, NucleiInstaller.VERSION) < 0) {
-                    System.err.println("Warning: this scanner is tested with Nuclei " + NucleiInstaller.VERSION
-                            + " or newer; found older version " + found + " at " + c + ". Results may differ.");
-                }
-                return c;
+                warnIfOlder(version, c.toString());
+                return c.toString();
             }
-        }
-        if (o.nuclei != null) {
-            System.err.println("[ERROR] Nuclei does not run: " + o.nuclei);
-            return null;
         }
         return installNuclei(o);
     }
 
+    private static void warnIfOlder(String versionOutput, String where) {
+        String found = NucleiInstaller.versionIn(versionOutput);
+        if (found != null && NucleiInstaller.compareVersions(found, NucleiInstaller.VERSION) < 0) {
+            System.err.println("Warning: this scanner is tested with Nuclei " + NucleiInstaller.VERSION
+                    + " or newer; found older version " + found + " at " + where + ". Results may differ.");
+        }
+    }
+
+    /** Absolute paths only; never the working folder. */
+    private static List<Path> candidateNuclei(Options o) {
+        List<Path> out = new ArrayList<>();
+        Path jarDir = jarDir();
+        if (jarDir != null) {
+            Path c = jarDir.resolve(NucleiInstaller.exeName());
+            if (Files.isRegularFile(c)) {
+                out.add(c);
+            }
+        }
+        if (o.nucleiVersion == null) {
+            Path tested = NucleiInstaller.installedBinary();
+            if (Files.isRegularFile(tested)) {
+                out.add(tested);
+            }
+        } else if ("latest".equals(o.nucleiVersion)) {
+            out.addAll(NucleiInstaller.installedBinaries());
+        } else {
+            Path exact = NucleiInstaller.installedBinary(o.nucleiVersion);
+            if (Files.isRegularFile(exact)) {
+                out.add(exact);
+            }
+        }
+        out.addAll(NucleiInstaller.pathCandidates(System.getenv("PATH"), Paths.get("")));
+        return out;
+    }
+
     private static String installNuclei(Options o) {
         boolean latest = "latest".equals(o.nucleiVersion);
-        String wanted = latest ? "the latest version" : "version " + o.nucleiVersion;
+        String version = o.nucleiVersion == null ? NucleiInstaller.VERSION : o.nucleiVersion;
+        String wanted = latest ? "the latest version" : "version " + version;
         String manual = "Install Nuclei from https://github.com/projectdiscovery/nuclei/releases and use --nuclei <path>.";
         String key = NucleiInstaller.platformKey();
         if (key == null) {
@@ -331,7 +367,9 @@ public final class DOOHSecurityScanner {
         System.out.println("Nuclei (the open-source scan engine by ProjectDiscovery) is needed.");
         System.out.println("It can be downloaded now (" + wanted + ", build for " + key + ") from the official page:");
         System.out.println("  https://github.com/projectdiscovery/nuclei/releases");
-        System.out.println("The file is checked against the SHA-256 checksum published with that release and saved in:");
+        System.out.println(latest
+                ? "The file is checked against the SHA-256 checksum published with that release and saved in:"
+                : "The file is checked against SHA-256 checksums built into this scanner and saved in:");
         System.out.println("  " + NucleiInstaller.cacheRoot().resolve("nuclei"));
         if (!o.yes) {
             Console c = System.console();
@@ -347,7 +385,7 @@ public final class DOOHSecurityScanner {
         }
         try {
             System.out.println("Downloading...");
-            Path bin = latest ? NucleiInstaller.installLatest() : NucleiInstaller.installVersion(o.nucleiVersion);
+            Path bin = latest ? NucleiInstaller.installLatest() : NucleiInstaller.installVersion(version);
             String out = nucleiVersionOutput(bin.toString());
             if (out == null) {
                 System.err.println("[ERROR] The downloaded Nuclei does not run on this system"
@@ -363,24 +401,31 @@ public final class DOOHSecurityScanner {
         }
     }
 
+    /**
+     * Templates to load. {@code --templates <dir>} is used as given. Otherwise the templates packaged in the jar are
+     * used, after being re-checked against the jar on every run. The working folder is never searched. A
+     * {@code templates/} folder next to the jar is only a fallback for a jar without packaged templates, and the
+     * project folder is searched only when running from build output (development).
+     */
     static Path resolveTemplates(String explicit) {
         if (explicit != null) {
             Path p = Paths.get(explicit).toAbsolutePath();
             return hasTemplates(p) ? p : null;
         }
-        for (Path dir : searchDirs()) {
-            Path p = dir.resolve("templates");
-            if (hasTemplates(p)) {
-                return p;
-            }
-        }
-        try { // single-jar use: templates packaged inside the jar
+        try {
             Path extracted = TemplateStore.extractFromJar();
-            return extracted != null && hasTemplates(extracted) ? extracted : null;
+            if (extracted != null && hasTemplates(extracted)) {
+                return extracted;
+            }
         } catch (IOException e) {
             System.err.println("Warning: could not extract the packaged templates: " + e.getMessage());
-            return null;
         }
+        for (Path dir : templateFallbackDirs()) {
+            if (hasTemplates(dir)) {
+                return dir;
+            }
+        }
+        return null;
     }
 
     private static boolean hasTemplates(Path dir) {
@@ -394,24 +439,37 @@ public final class DOOHSecurityScanner {
         }
     }
 
-    /** Current directory first, then the folder containing the jar. */
-    private static List<Path> searchDirs() {
-        List<Path> dirs = new ArrayList<>();
-        dirs.add(Paths.get("").toAbsolutePath());
+    /** Where the scanner's code lives: a jar file, or a build-output folder when run from an IDE or Maven. */
+    private static Path codeLocation() {
         try {
-            Path jar = Paths.get(DOOHSecurityScanner.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-            Path parent = Files.isDirectory(jar) ? jar : jar.getParent();
-            if (parent != null) {
-                dirs.add(parent);
-                if (parent.getParent() != null) {
-                    dirs.add(parent.getParent()); // target/classes -> target -> project root
-                    if (parent.getParent().getParent() != null) {
-                        dirs.add(parent.getParent().getParent());
-                    }
-                }
-            }
+            return Paths.get(DOOHSecurityScanner.class.getProtectionDomain().getCodeSource().getLocation().toURI())
+                    .toAbsolutePath().normalize();
         } catch (URISyntaxException | RuntimeException ex) {
-            // ignore: current directory only
+            return null;
+        }
+    }
+
+    /** The folder containing the jar, or {@code null} when not running from a jar. */
+    private static Path jarDir() {
+        Path loc = codeLocation();
+        return loc != null && Files.isRegularFile(loc) ? loc.getParent() : null;
+    }
+
+    private static List<Path> templateFallbackDirs() {
+        List<Path> dirs = new ArrayList<>();
+        Path loc = codeLocation();
+        if (loc == null) {
+            return dirs;
+        }
+        if (Files.isRegularFile(loc)) {
+            if (loc.getParent() != null) {
+                dirs.add(loc.getParent().resolve("templates")); // jar without packaged templates
+            }
+        } else { // build output: target/classes (templates are copied in) or the project folder above it
+            dirs.add(loc.resolve("templates"));
+            if (loc.getParent() != null && loc.getParent().getParent() != null) {
+                dirs.add(loc.getParent().getParent().resolve("templates"));
+            }
         }
         return dirs;
     }
@@ -476,11 +534,12 @@ public final class DOOHSecurityScanner {
         System.out.println();
         System.out.println("Options:");
         System.out.println("      --intrusive        also try vendor default passwords (ONLY with the owner's written consent)");
-        System.out.println("      --templates <dir>  template folder (default: ./templates, else the templates packaged in the jar)");
-        System.out.println("      --nuclei <path>    Nuclei executable (default: next to the scanner, cached copy, then PATH;");
-        System.out.println("                         if none is found the latest Nuclei for this machine is downloaded and checksum-verified)");
-        System.out.println("      --install-nuclei   download/verify Nuclei now (updates to the latest) and exit");
-        System.out.println("      --nuclei-version <v>  'latest' (default) or an exact version such as " + NucleiInstaller.VERSION + " for downloads");
+        System.out.println("      --templates <dir>  template folder (default: the templates packaged in the jar)");
+        System.out.println("      --nuclei <path>    Nuclei executable to run as given (default: only the official build is used,");
+        System.out.println("                         found next to the jar, in the cache or on PATH, never in the current folder;");
+        System.out.println("                         if none is found the tested Nuclei " + NucleiInstaller.VERSION + " is downloaded and checksum-verified)");
+        System.out.println("      --install-nuclei   download/verify Nuclei now and exit");
+        System.out.println("      --nuclei-version <v>  use/download 'latest' or an exact version instead of the tested " + NucleiInstaller.VERSION);
         System.out.println("      --offline          never download anything");
         System.out.println("      --out <dir>        output folder (default: ./scans)");
         System.out.println("  -y, --yes              skip the confirmation prompt (you confirm you are authorised)");

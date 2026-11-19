@@ -91,8 +91,9 @@ class NucleiInstallerTest {
         assertEquals("#!/bin/sh\necho fake\n", Files.readString(dest));
         assertFalse(Files.exists(tmp.resolve("bin").resolve("README.md")), "only the executable is extracted");
         try (var s = Files.list(tmp.resolve("bin"))) {
-            assertEquals(1, s.count(), "no temp files left behind");
+            assertEquals(2, s.count(), "only the executable and its recorded hash; no temp files left behind");
         }
+        assertEquals(sha(Files.readAllBytes(dest)), Files.readString(NucleiInstaller.recordFor(dest)).trim());
     }
 
     @Test
@@ -210,5 +211,60 @@ class NucleiInstallerTest {
     @Test
     void rejectsUnsafeVersionStrings() {
         assertThrows(IOException.class, () -> NucleiInstaller.installVersion("../evil"));
+    }
+
+    @Test
+    void rejectsExtractedExecutableThatIsNotTheOfficialBuild() throws Exception {
+        Path dest = tmp.resolve("b5").resolve("nuclei");
+        IOException ex = assertThrows(IOException.class, () -> NucleiInstaller.install(
+                base, NucleiInstaller.VERSION, "linux_amd64", Map.of("linux_amd64", sha(zip)), dest, "0".repeat(64)));
+        assertTrue(ex.getMessage().contains("does not match the official build"));
+        assertFalse(Files.exists(dest), "nothing is kept");
+    }
+
+    @Test
+    void everyPinnedArchiveHasAPinnedExecutableHash() {
+        assertEquals(NucleiInstaller.SHA256.keySet(), NucleiInstaller.BINARY_SHA256.keySet());
+        for (String h : NucleiInstaller.BINARY_SHA256.values()) {
+            assertTrue(h.matches("[0-9a-f]{64}"));
+        }
+    }
+
+    @Test
+    void trustsOnlyOfficialBuildsOrRecordedCacheCopies() throws Exception {
+        Path cache = tmp.resolve("cache").resolve("nuclei");
+        Path official = Files.write(tmp.resolve("official"), "official build".getBytes(StandardCharsets.UTF_8));
+        Map<String, String> pinned = Map.of("linux_amd64", NucleiInstaller.sha256(official));
+
+        // planted file that is not the official build, even with a hash file beside it: not trusted outside the cache
+        Path planted = Files.write(tmp.resolve("planted"), "evil".getBytes(StandardCharsets.UTF_8));
+        Files.writeString(NucleiInstaller.recordFor(planted), NucleiInstaller.sha256(planted));
+        assertFalse(NucleiInstaller.isTrusted(planted, "linux_amd64", pinned, cache));
+
+        assertTrue(NucleiInstaller.isTrusted(official, "linux_amd64", pinned, cache), "the official build is trusted anywhere");
+        assertFalse(NucleiInstaller.isTrusted(official, null, pinned, cache), "unknown platform: nothing is official");
+        assertFalse(NucleiInstaller.isTrusted(tmp.resolve("missing"), "linux_amd64", pinned, cache));
+
+        // a copy this scanner installed into its cache is trusted while its recorded hash matches...
+        Path cached = Files.write(Files.createDirectories(cache.resolve("9.9.9")).resolve("nuclei"), "latest build".getBytes(StandardCharsets.UTF_8));
+        Files.writeString(NucleiInstaller.recordFor(cached), NucleiInstaller.sha256(cached));
+        assertTrue(NucleiInstaller.isTrusted(cached, "linux_amd64", pinned, cache));
+        // ...and not once the file is tampered with
+        Files.writeString(cached, "tampered");
+        assertFalse(NucleiInstaller.isTrusted(cached, "linux_amd64", pinned, cache));
+    }
+
+    @Test
+    void pathSearchSkipsRelativeEntriesAndTheCurrentFolder() throws Exception {
+        String exe = NucleiInstaller.exeName();
+        Path cwd = Files.createDirectories(tmp.resolve("work"));
+        Path good = Files.createDirectories(tmp.resolve("good"));
+        Files.writeString(cwd.resolve(exe), "x");
+        Files.writeString(good.resolve(exe), "x");
+        Files.writeString(Files.createDirectories(tmp.resolve("rel")).resolve(exe), "x");
+        String sep = java.io.File.pathSeparator;
+        String path = String.join(sep, "", ".", "rel", cwd.toString(), good.toString());
+        assertEquals(java.util.List.of(good.resolve(exe)), NucleiInstaller.pathCandidates(path, cwd));
+        assertTrue(NucleiInstaller.pathCandidates(null, cwd).isEmpty());
     }
 }

@@ -19,7 +19,7 @@ Unauthorised scanning may be illegal. The scanner asks you to confirm this befor
 ## Quick start
 
 Pick the download for your computer from the **Releases** page. Each one includes everything: the scanner,
-its own Java runtime (nothing to install), Nuclei (the tested version) and the templates.
+its own Java runtime (nothing to install), the tested Nuclei and the templates.
 
 | Your computer | Download |
 |---|---|
@@ -74,15 +74,19 @@ java -jar dooh-security-scanner.jar -t targets.txt     # use the downloaded jar'
 You do **not** need to install Nuclei or copy the templates yourself:
 
 - **Nuclei is downloaded automatically** the first time it is needed, after you approve it. The scanner picks the
-  build for your OS and CPU and fetches the **latest** release from ProjectDiscovery's official GitHub page. It checks
-  the download against the SHA-256 checksum published with that release (the download is discarded if it does not
-  match) and stores it in `~/.dooh-security-scanner/` (on Windows: `C:\Users\<you>\.dooh-security-scanner\`).
-  If GitHub's "latest" cannot be looked up, it falls back to the tested version (`v3.4.10`, whose checksums are
-  built into the scanner). Use `--yes` to approve in scripts, `--offline` to forbid downloads,
-  `--install-nuclei` to fetch (or update to) the latest now, or `--nuclei-version 3.4.10` for an exact version.
-  If you prefer, put your own Nuclei next to the jar, on `PATH`, or pass `--nuclei <path>`.
-- **The templates are packaged inside the jar** and extracted automatically. A `templates/` folder next to the
-  jar (or `--templates <dir>`) takes precedence, which is handy for testing your own templates.
+  build for your OS and CPU and fetches the tested release (`v3.4.10`) from ProjectDiscovery's official GitHub page,
+  checking it against SHA-256 checksums built into the scanner (the download is discarded if they do not match).
+  It is stored in `~/.dooh-security-scanner/` (on Windows: `C:\Users\<you>\.dooh-security-scanner\`).
+  Use `--yes` to approve in scripts, `--offline` to forbid downloads, `--install-nuclei` to fetch it now, or
+  `--nuclei-version latest` (or an exact version) to use a newer release; its checksum then comes from that release's
+  own published checksums, which protects the download but not against a compromised release.
+- **Only the official Nuclei is run automatically.** A Nuclei found next to the jar, in the cache or on `PATH` is used
+  only if it matches the official build's SHA-256 (checked on every run); anything else is skipped with a notice.
+  The current folder is never searched, so a file planted in, say, your Downloads folder is never executed.
+  `--nuclei <path>` runs exactly the file you name (with a warning if it is not the official build).
+- **The templates are packaged inside the jar**, extracted automatically and re-checked against the jar on every run
+  (a changed, added or missing file triggers a clean restore). A `templates/` folder in the current folder is ignored;
+  use `--templates <dir>` to test your own templates.
 
 ## Using it
 
@@ -101,9 +105,9 @@ Anything else is rejected before anything runs.
 | `-h, --hosts <list>` | comma-separated targets |
 | `--discover` | find devices on the local network (shows the network, asks to confirm) |
 | `--intrusive` | also try vendor default passwords. **Only with the owner's written consent** |
-| `--templates <dir>`, `--nuclei <path>`, `--out <dir>` | locations |
-| `--install-nuclei` | download and verify the latest Nuclei (updates a cached older one), then exit |
-| `--nuclei-version <v>` | `latest` (default) or an exact version such as `3.4.10` for downloads |
+| `--templates <dir>`, `--nuclei <path>`, `--out <dir>` | locations (`--nuclei` runs exactly that file) |
+| `--install-nuclei` | download and verify Nuclei, then exit (with `--nuclei-version latest`: update to the newest) |
+| `--nuclei-version <v>` | use/download `latest` or an exact version instead of the tested `3.4.10` |
 | `--offline` | never download anything |
 | `-y, --yes` | skip prompts (you confirm you are authorised, and approve the Nuclei download) |
 | `--version`, `--help` | version and usage |

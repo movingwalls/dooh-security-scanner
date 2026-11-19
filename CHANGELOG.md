@@ -6,13 +6,22 @@ Per-release notes are in [docs/releases/](docs/releases/).
 
 ## [1.0.0-rc3] - 2026-11-19 (release candidate)
 
+### Security
+- **The current folder is no longer searched for Nuclei or templates** (rc1 and rc2 ran any `nuclei`/`nuclei.exe`, and
+  loaded a `templates/` folder, found in the folder the scanner was started from, with the user's rights). Nuclei is
+  now looked up only next to the jar, in the scanner's cache and on absolute `PATH` entries, and runs only if its SHA-256
+  matches the official build (or, for a cached `--nuclei-version latest` install, the hash recorded at install). Anything
+  else is skipped with a notice. `--nuclei <path>` still runs exactly the file you name, with a warning.
+- The extracted templates are re-checked against the jar on every run; a changed, added or missing file is restored.
+- The extracted Nuclei executable is checked against a compiled-in SHA-256, in addition to the archive.
+- New tests run the real scanner with planted/tampered binaries (`PlantedBinaryTest`) and tampered templates.
+
 ### Added
-- Nuclei is now downloaded as the **latest** release for the machine's OS and CPU (verified against the SHA-256
-  published with that release), falling back to the tested version if the lookup fails. New `--nuclei-version`
-  option; `--install-nuclei` updates to the latest. Downloads retry on connection failures and timeouts.
-- `scripts/platform-test.sh`: target-machine test (auto-download, template validation, false-positive check,
-  fresh-machine run). CI runs it on Linux x64/arm64, macOS Intel/Apple Silicon and Windows, and the release workflow
-  publishes nothing unless all of them pass.
+- `--nuclei-version latest|x.y.z` downloads a newer Nuclei for this machine's OS/CPU, verified against the checksum published
+  with that release (the tested `3.4.10` stays the default). Downloads retry on connection failures and timeouts.
+- `scripts/platform-test.sh`: target-machine test (download, template validation, false-positive check, fresh-machine run).
+  CI runs it on Linux x64/arm64, macOS Intel/Apple Silicon and Windows, and the release workflow publishes nothing unless
+  all of them pass.
 
 ### Changed
 - Self-contained bundles (own Java runtime, pinned Nuclei, templates) are now published for every mainstream

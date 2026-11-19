@@ -19,7 +19,7 @@ targets (-t file | -h list | --discover)
 |---|---|
 | `DOOHSecurityScanner` | CLI, orchestration, exit codes |
 | `TargetParser` | input validation; the only gate for what reaches Nuclei |
-| `NucleiInstaller` | downloads the latest Nuclei for this OS/CPU from the official GitHub release, verified against that release's published SHA-256; falls back to the tested version with compiled-in checksums |
+| `NucleiInstaller` | downloads the tested Nuclei for this OS/CPU from the official GitHub release, verified against compiled-in SHA-256 values (archive and executable); optionally the latest release; decides which Nuclei is trusted to run |
 | `TemplateStore` | extracts the templates packaged in the jar |
 | `LocalArpScanner` | optional LAN discovery (real subnet, no VPN/virtual adapters, no multicast) |
 | `DOOHReportPrinter` | PASS/REVIEW/FAIL classification and text/JSON/HTML output |
@@ -38,12 +38,17 @@ targets (-t file | -h list | --discover)
 reachable and should be checked); `PASS` = no finding; `ERROR` = the run was unreliable, no verdict given.
 Exit codes: 0 no FAIL, 1 FAIL present, 2 usage/invalid targets, 3 ERROR.
 
-## Updating the tested Nuclei version
-The scanner downloads the *latest* Nuclei by default; `NucleiInstaller.VERSION` is the version it is tested with, the
-fallback when the latest cannot be looked up, and the one bundled in the release packages.
-1. Read the official `nuclei_<ver>_checksums.txt` from the release page.
-2. Update `NucleiInstaller.VERSION` and the `SHA256` table (the release workflow and `scripts/build-bundle.sh` read them from there).
-3. Run `scripts/platform-test.sh` (CI does this on every platform) to check the templates against both the new and the latest Nuclei.
+## Which Nuclei is run
+Without `--nuclei`, candidates are looked up only in: the folder of the jar, the per-user cache, and absolute `PATH`
+entries. The current folder and relative `PATH` entries are never searched. A candidate runs only if its SHA-256 equals
+`NucleiInstaller.BINARY_SHA256` for this platform (the official build), or it is in the cache and matches the hash
+recorded when the scanner installed it (used for `--nuclei-version latest`; this detects later modification but, being
+recorded locally, is not a signature). Others are skipped with a notice. `--nuclei <path>` runs exactly that file.
+`PlantedBinaryTest` runs the real scanner with planted and tampered binaries to prove this.
 
-Trust note: for the latest version the checksum comes from the same GitHub release as the download, so it protects against corrupted or
-tampered downloads in transit, not against a compromised release. Use `--nuclei-version <tested>` for the compiled-in checksums.
+## Updating the tested Nuclei version
+`NucleiInstaller.VERSION` is the version the scanner is tested with, installs by default, and bundles in the release packages.
+1. Read the official `nuclei_<ver>_checksums.txt` from the release page.
+2. Update `VERSION`, the `SHA256` table (archives) and the `BINARY_SHA256` table (SHA-256 of the extracted `nuclei` / `nuclei.exe`
+   of each archive). The release workflow and `scripts/build-bundle.sh` read them from there.
+3. Run `scripts/platform-test.sh` (CI does this on every platform); it checks the templates against both the tested and the latest Nuclei.
