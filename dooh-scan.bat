@@ -1,5 +1,5 @@
 @echo off
-rem Launcher for Windows. The *-windows.zip bundle has its own Java (dooh-security-scanner.exe); the portable zip needs Java 17+.
+rem Launcher for Windows. The *-windows-x64.zip bundle has its own Java (dooh-security-scanner.exe); the portable zip needs Java 17+.
 cd /d "%~dp0"
 if exist dooh-security-scanner.exe (
   dooh-security-scanner.exe %*

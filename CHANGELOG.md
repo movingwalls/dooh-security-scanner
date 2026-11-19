@@ -4,6 +4,24 @@ All notable changes to this project are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versions follow [Semantic Versioning](https://semver.org/).
 Per-release notes are in [docs/releases/](docs/releases/).
 
+## [Unreleased]
+
+### Added
+- Nuclei is now downloaded as the **latest** release for the machine's OS and CPU (verified against the SHA-256
+  published with that release), falling back to the tested version if the lookup fails. New `--nuclei-version`
+  option; `--install-nuclei` updates to the latest. Downloads retry on connection failures and timeouts.
+- `scripts/platform-test.sh`: target-machine test (auto-download, template validation, false-positive check,
+  fresh-machine run). CI runs it on Linux x64/arm64, macOS Intel/Apple Silicon and Windows, and the release workflow
+  publishes nothing unless all of them pass.
+
+### Changed
+- Self-contained bundles (own Java runtime, pinned Nuclei, templates) are now published for every mainstream
+  platform, each built and smoke-tested natively: `windows-x64`, `linux-x64`, `linux-arm64`, `macos-x64`
+  (Intel) and `macos-arm64` (Apple Silicon). Linux/macOS bundles are `.tar.gz`; Windows stays `.zip`.
+  The Windows asset is renamed `...-windows.zip` -> `...-windows-x64.zip`.
+- CI now builds and smoke-tests the bundle on all five platforms on every change, using the same
+  `scripts/build-bundle.sh` as the release.
+
 ## [1.0.0-rc2] - 2026-11-19 (release candidate)
 
 ### Added

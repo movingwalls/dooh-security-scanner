@@ -15,16 +15,24 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * Downloads the pinned Nuclei release from ProjectDiscovery's official GitHub releases.
+ * Downloads Nuclei from ProjectDiscovery's official GitHub releases, for the machine it runs on.
  *
- * <p>Supply-chain safety: the version is pinned, the expected SHA-256 of every supported platform
- * archive is compiled into this class (taken from the official {@code nuclei_<version>_checksums.txt}),
- * the archive is verified <em>before</em> anything is extracted, only the single Nuclei executable is
- * extracted, and downloads must use HTTPS. Nothing is executed here.
+ * <p>By default the <em>latest</em> release is installed: its version is read from the redirect of
+ * {@code github.com/projectdiscovery/nuclei/releases/latest} and its SHA-256 from the checksums file that
+ * ProjectDiscovery publishes with that release. If that lookup fails, the tested version ({@link #VERSION})
+ * is installed instead, checked against the SHA-256 values compiled into this class.
+ *
+ * <p>Safety: HTTPS only, the archive is verified <em>before</em> anything is extracted, only the single
+ * Nuclei executable is extracted, and version strings are validated before they reach a URL or a path.
+ * A checksum fetched from the same release protects against corrupted or tampered downloads in transit, but
+ * not against a compromised release; the compiled-in values for {@link #VERSION} do. Nothing is executed here.
  */
 final class NucleiInstaller {
 
@@ -42,7 +50,12 @@ final class NucleiInstaller {
             "windows_amd64", "7de765bdd73f1c8ec577e82df8196b3971ecd9efc7061a7cab931bc1a8055c68",
             "windows_386", "2a4cb6e8042437bb65c55c0d575951f9f6dcc3e31c88a5cfaa427c9af4c9e746");
 
-    static final String OFFICIAL_BASE = "https://github.com/projectdiscovery/nuclei/releases/download/v" + VERSION + "/";
+    static final String OFFICIAL_BASE = releaseBase(VERSION);
+
+    /** Redirects to {@code .../releases/tag/v<latest>}; unlike the REST API it has no rate limit. */
+    static final String LATEST_URL = "https://github.com/projectdiscovery/nuclei/releases/latest";
+
+    private static final Pattern PLAIN_VERSION = Pattern.compile("\\d+\\.\\d+\\.\\d+");
 
     /** Hard cap so a hostile or broken server cannot fill the disk. */
     private static final long MAX_ARCHIVE_BYTES = 200L * 1024 * 1024;
@@ -67,9 +80,56 @@ final class NucleiInstaller {
         return isWindows() ? "nuclei.exe" : "nuclei";
     }
 
-    /** Where the pinned Nuclei is (or will be) installed. */
+    static String releaseBase(String version) {
+        return "https://github.com/projectdiscovery/nuclei/releases/download/v" + version + "/";
+    }
+
+    static boolean isPlainVersion(String v) {
+        return v != null && PLAIN_VERSION.matcher(v).matches();
+    }
+
+    /** Where the tested Nuclei is (or will be) installed. */
     static Path installedBinary() {
-        return cacheRoot().resolve("nuclei").resolve(VERSION).resolve(exeName());
+        return installedBinary(VERSION);
+    }
+
+    static Path installedBinary(String version) {
+        return cacheRoot().resolve("nuclei").resolve(version).resolve(exeName());
+    }
+
+    /** Orders dotted numeric versions: negative, zero or positive like {@link Comparable}. */
+    static int compareVersions(String a, String b) {
+        String[] x = a.split("\\."), y = b.split("\\.");
+        for (int i = 0; i < Math.max(x.length, y.length); i++) {
+            int p = i < x.length ? Integer.parseInt(x[i]) : 0;
+            int q = i < y.length ? Integer.parseInt(y[i]) : 0;
+            if (p != q) return Integer.compare(p, q);
+        }
+        return 0;
+    }
+
+    /** The highest Nuclei version already installed in the per-user cache, or {@code null}. */
+    static Path newestInstalled() {
+        Path dir = cacheRoot().resolve("nuclei");
+        if (!Files.isDirectory(dir)) {
+            return null;
+        }
+        try (Stream<Path> s = Files.list(dir)) {
+            return s.filter(d -> isPlainVersion(d.getFileName().toString()))
+                    .filter(d -> Files.isRegularFile(d.resolve(exeName())))
+                    .max((a, b) -> compareVersions(a.getFileName().toString(), b.getFileName().toString()))
+                    .map(d -> d.resolve(exeName()))
+                    .orElse(null);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** Extracts {@code 3.11.1} from text such as {@code Nuclei Engine Version: v3.11.1}; {@code null} if absent. */
+    static String versionIn(String text) {
+        if (text == null) return null;
+        Matcher m = Pattern.compile("v(\\d+\\.\\d+\\.\\d+)").matcher(text);
+        return m.find() ? m.group(1) : null;
     }
 
     /** Release asset key for this machine, e.g. {@code windows_amd64}; {@code null} if unsupported. */
@@ -96,32 +156,146 @@ final class NucleiInstaller {
     }
 
     static String assetName(String key) {
-        return "nuclei_" + VERSION + "_" + key + ".zip";
+        return assetName(VERSION, key);
     }
 
-    /** Downloads, verifies and extracts the official release into {@link #installedBinary()}. */
+    static String assetName(String version, String key) {
+        return "nuclei_" + version + "_" + key + ".zip";
+    }
+
+    private static IOException unsupported() {
+        return new IOException("No official Nuclei build is available for this system ("
+                + System.getProperty("os.name") + "/" + System.getProperty("os.arch")
+                + "). Install Nuclei manually and use --nuclei <path>.");
+    }
+
+    /** Installs the tested version ({@link #VERSION}) using the checksums compiled into this class. */
     static Path install() throws IOException {
         String key = platformKey();
         if (key == null) {
-            throw new IOException("No official Nuclei build is pinned for this system ("
-                    + System.getProperty("os.name") + "/" + System.getProperty("os.arch")
-                    + "). Install Nuclei " + VERSION + " manually and use --nuclei <path>.");
+            throw unsupported();
         }
-        return install(OFFICIAL_BASE, key, SHA256, installedBinary());
+        return install(OFFICIAL_BASE, VERSION, key, SHA256, installedBinary());
     }
 
-    /** Test seam: base URL, hash table and destination are parameters. */
-    static Path install(String baseUrl, String key, Map<String, String> hashes, Path destination) throws IOException {
-        String expected = hashes.get(key);
-        if (expected == null) {
-            throw new IOException("No checksum pinned for " + key);
+    /**
+     * Installs the latest official release for this machine. If the latest version or its checksum cannot be
+     * looked up, falls back to the tested version so a flaky lookup never leaves the user without Nuclei.
+     */
+    static Path installLatest() throws IOException {
+        String latest;
+        try {
+            latest = resolveLatestVersion(LATEST_URL);
+        } catch (IOException e) {
+            System.err.println("Could not look up the latest Nuclei (" + e.getMessage() + "); using " + VERSION + " instead.");
+            return install();
         }
-        URI uri = URI.create(baseUrl + assetName(key));
+        return installVersion(latest);
+    }
+
+    /** Installs a specific release. The tested version uses the compiled-in checksum; others use the release's own. */
+    static Path installVersion(String version) throws IOException {
+        if (!isPlainVersion(version)) {
+            throw new IOException("Not a valid Nuclei version: " + version);
+        }
+        if (version.equals(VERSION)) {
+            return install();
+        }
+        String key = platformKey();
+        if (key == null) {
+            throw unsupported();
+        }
+        String base = releaseBase(version);
+        String hash = fetchChecksum(base, version, key);
+        return install(base, version, key, Map.of(key, hash), installedBinary(version));
+    }
+
+    /** Reads the latest version from the redirect of {@code latestUrl}; the redirect is never followed. */
+    static String resolveLatestVersion(String latestUrl) throws IOException {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return resolveLatestVersionOnce(latestUrl);
+            } catch (IOException e) {
+                if (!transientFailure(e) || attempt >= ATTEMPTS) {
+                    throw e;
+                }
+                backoff(attempt);
+            }
+        }
+    }
+
+    private static String resolveLatestVersionOnce(String latestUrl) throws IOException {
+        URI uri = URI.create(latestUrl);
+        requireSecure(uri);
+        HttpClient client = HttpClient.newBuilder()
+                .followRedirects(HttpClient.Redirect.NEVER)
+                .connectTimeout(Duration.ofSeconds(20))
+                .build();
+        HttpRequest req = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(30))
+                .header("User-Agent", "dooh-security-scanner").GET().build();
+        try {
+            HttpResponse<Void> resp = client.send(req, HttpResponse.BodyHandlers.discarding());
+            String location = resp.headers().firstValue("Location").orElse("");
+            Matcher m = Pattern.compile("/tag/v(\\d+\\.\\d+\\.\\d+)$").matcher(location);
+            if (resp.statusCode() / 100 != 3 || !m.find()) {
+                throw new IOException("unexpected answer (HTTP " + resp.statusCode() + ") from " + uri);
+            }
+            return m.group(1);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("lookup interrupted", e);
+        }
+    }
+
+    /** Downloads {@code nuclei_<version>_checksums.txt} from the release and returns the hash for {@code key}. */
+    static String fetchChecksum(String baseUrl, String version, String key) throws IOException {
+        URI uri = URI.create(baseUrl + "nuclei_" + version + "_checksums.txt");
+        requireSecure(uri);
+        Path tmp = Files.createTempFile("nuclei-checksums-", ".txt");
+        try {
+            download(uri, tmp);
+            String hash = parseChecksum(Files.readString(tmp), assetName(version, key));
+            if (hash == null) {
+                throw new IOException("no checksum for " + assetName(version, key) + " in the release's checksums file");
+            }
+            return hash;
+        } finally {
+            Files.deleteIfExists(tmp);
+        }
+    }
+
+    /** Finds {@code <hash>  <asset>} in a {@code sha256sum}-style file; {@code null} if the asset is not listed. */
+    static String parseChecksum(String text, String asset) {
+        for (String line : text.split("\\R")) {
+            String[] parts = line.trim().split("\\s+");
+            if (parts.length == 2 && parts[1].equals(asset) && parts[0].matches("[0-9a-fA-F]{64}")) {
+                return parts[0].toLowerCase(Locale.ROOT);
+            }
+        }
+        return null;
+    }
+
+    private static void requireSecure(URI uri) throws IOException {
         boolean loopbackTest = "http".equals(uri.getScheme())
                 && ("127.0.0.1".equals(uri.getHost()) || "localhost".equals(uri.getHost()));
         if (!"https".equals(uri.getScheme()) && !loopbackTest) {
             throw new IOException("Refusing to download over an insecure connection: " + uri);
         }
+    }
+
+    /** Test seam for the tested version: base URL, hash table and destination are parameters. */
+    static Path install(String baseUrl, String key, Map<String, String> hashes, Path destination) throws IOException {
+        return install(baseUrl, VERSION, key, hashes, destination);
+    }
+
+    static Path install(String baseUrl, String version, String key, Map<String, String> hashes, Path destination)
+            throws IOException {
+        String expected = hashes.get(key);
+        if (expected == null) {
+            throw new IOException("No checksum pinned for " + key);
+        }
+        URI uri = URI.create(baseUrl + assetName(version, key));
+        requireSecure(uri);
 
         Files.createDirectories(destination.getParent());
         Path archive = Files.createTempFile(destination.getParent(), "nuclei-", ".zip.part");
@@ -129,7 +303,7 @@ final class NucleiInstaller {
         try {
             String actual = download(uri, archive);
             if (!actual.equalsIgnoreCase(expected)) {
-                throw new IOException("Checksum mismatch for " + assetName(key) + " (expected " + expected
+                throw new IOException("Checksum mismatch for " + assetName(version, key) + " (expected " + expected
                         + ", got " + actual + "). The download was discarded.");
             }
             extractBinary(archive, tmpBinary, destination.getFileName().toString());
@@ -144,8 +318,37 @@ final class NucleiInstaller {
         }
     }
 
-    /** Streams the response to {@code target} and returns its SHA-256 (hex). */
+    /** Attempts for a network step that failed to connect or timed out (flaky Wi-Fi, busy CDN node). */
+    private static final int ATTEMPTS = 3;
+
+    private static boolean transientFailure(IOException e) {
+        return e instanceof java.net.http.HttpTimeoutException || e instanceof java.net.ConnectException;
+    }
+
+    private static void backoff(int attempt) throws IOException {
+        try {
+            Thread.sleep(1000L * attempt);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Download interrupted", ie);
+        }
+    }
+
+    /** Streams the response to {@code target} and returns its SHA-256 (hex); retries connect failures and timeouts. */
     private static String download(URI uri, Path target) throws IOException {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return downloadOnce(uri, target);
+            } catch (IOException e) {
+                if (!transientFailure(e) || attempt >= ATTEMPTS) {
+                    throw e;
+                }
+                backoff(attempt);
+            }
+        }
+    }
+
+    private static String downloadOnce(URI uri, Path target) throws IOException {
         HttpClient client = HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .connectTimeout(Duration.ofSeconds(20))

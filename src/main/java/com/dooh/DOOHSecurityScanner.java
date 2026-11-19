@@ -60,6 +60,7 @@ public final class DOOHSecurityScanner {
         boolean yes;
         boolean offline;
         boolean installOnly;
+        String nucleiVersion = "latest";
     }
 
     public static void main(String[] args) {
@@ -79,9 +80,9 @@ public final class DOOHSecurityScanner {
         }
 
         try {
-            // 0. --install-nuclei: just make sure the pinned Nuclei is available.
+            // 0. --install-nuclei: fetch (or update to) the wanted Nuclei and exit.
             if (o.installOnly) {
-                String path = locateNuclei(o);
+                String path = o.nuclei == null && !o.offline ? installNuclei(o) : locateNuclei(o);
                 if (path == null) {
                     return 3;
                 }
@@ -288,17 +289,19 @@ public final class DOOHSecurityScanner {
                     candidates.add(c.toString());
                 }
             }
-            if (Files.isRegularFile(NucleiInstaller.installedBinary())) {
-                candidates.add(NucleiInstaller.installedBinary().toString());
+            Path cached = NucleiInstaller.newestInstalled();
+            if (cached != null) {
+                candidates.add(cached.toString());
             }
             candidates.add(NucleiInstaller.exeName()); // PATH
         }
         for (String c : candidates) {
             String version = nucleiVersionOutput(c);
             if (version != null) {
-                if (!version.contains(NucleiInstaller.VERSION)) {
+                String found = NucleiInstaller.versionIn(version);
+                if (found != null && NucleiInstaller.compareVersions(found, NucleiInstaller.VERSION) < 0) {
                     System.err.println("Warning: this scanner is tested with Nuclei " + NucleiInstaller.VERSION
-                            + "; found a different version at " + c + ". Results may differ.");
+                            + " or newer; found older version " + found + " at " + c + ". Results may differ.");
                 }
                 return c;
             }
@@ -311,11 +314,13 @@ public final class DOOHSecurityScanner {
     }
 
     private static String installNuclei(Options o) {
+        boolean latest = "latest".equals(o.nucleiVersion);
+        String wanted = latest ? "the latest version" : "version " + o.nucleiVersion;
+        String manual = "Install Nuclei from https://github.com/projectdiscovery/nuclei/releases and use --nuclei <path>.";
         String key = NucleiInstaller.platformKey();
-        String manual = "Install Nuclei " + NucleiInstaller.VERSION + " from https://github.com/projectdiscovery/nuclei/releases/tag/v"
-                + NucleiInstaller.VERSION + " and use --nuclei <path>.";
         if (key == null) {
-            System.err.println("[ERROR] Nuclei was not found and no official build is pinned for this system. " + manual);
+            System.err.println("[ERROR] Nuclei was not found and no official build is available for this system ("
+                    + System.getProperty("os.name") + "/" + System.getProperty("os.arch") + "). " + manual);
             return null;
         }
         if (o.offline) {
@@ -323,17 +328,18 @@ public final class DOOHSecurityScanner {
             return null;
         }
         System.out.println();
-        System.out.println("Nuclei (the open-source scan engine by ProjectDiscovery) was not found.");
-        System.out.println("It can be downloaded now: " + NucleiInstaller.OFFICIAL_BASE + NucleiInstaller.assetName(key));
-        System.out.println("The file is checked against a SHA-256 checksum built into this scanner and saved in:");
-        System.out.println("  " + NucleiInstaller.installedBinary().getParent());
+        System.out.println("Nuclei (the open-source scan engine by ProjectDiscovery) is needed.");
+        System.out.println("It can be downloaded now (" + wanted + ", build for " + key + ") from the official page:");
+        System.out.println("  https://github.com/projectdiscovery/nuclei/releases");
+        System.out.println("The file is checked against the SHA-256 checksum published with that release and saved in:");
+        System.out.println("  " + NucleiInstaller.cacheRoot().resolve("nuclei"));
         if (!o.yes) {
             Console c = System.console();
             if (c == null) {
                 System.err.println("Non-interactive session: add --yes to allow the download, or " + manual);
                 return null;
             }
-            String a = c.readLine("Download Nuclei " + NucleiInstaller.VERSION + " now? Type YES to continue: ");
+            String a = c.readLine("Download Nuclei " + wanted + " now? Type YES to continue: ");
             if (a == null || !a.strip().equalsIgnoreCase("yes")) {
                 System.err.println("Download declined. " + manual);
                 return null;
@@ -341,13 +347,14 @@ public final class DOOHSecurityScanner {
         }
         try {
             System.out.println("Downloading...");
-            Path bin = NucleiInstaller.install();
-            if (nucleiVersionOutput(bin.toString()) == null) {
+            Path bin = latest ? NucleiInstaller.installLatest() : NucleiInstaller.installVersion(o.nucleiVersion);
+            String out = nucleiVersionOutput(bin.toString());
+            if (out == null) {
                 System.err.println("[ERROR] The downloaded Nuclei does not run on this system"
                         + (NucleiInstaller.isWindows() ? " (your antivirus may have blocked it; allow-list nuclei.exe)." : "."));
                 return null;
             }
-            System.out.println("Installed and verified Nuclei " + NucleiInstaller.VERSION + ".");
+            System.out.println("Installed and verified Nuclei " + NucleiInstaller.versionIn(out) + ".");
             return bin.toString();
         } catch (IOException e) {
             System.err.println("[ERROR] Could not install Nuclei: " + e.getMessage());
@@ -427,6 +434,14 @@ public final class DOOHSecurityScanner {
                 case "--yes": case "-y": o.yes = true; break;
                 case "--offline": o.offline = true; break;
                 case "--install-nuclei": o.installOnly = true; break;
+                case "--nuclei-version": {
+                    String v = value(args, ++i, a);
+                    if (!"latest".equals(v) && !NucleiInstaller.isPlainVersion(v)) {
+                        throw new IllegalArgumentException("--nuclei-version must be 'latest' or a version like 3.4.10");
+                    }
+                    o.nucleiVersion = v;
+                    break;
+                }
                 case "--help": usage(); return false;
                 case "--version": System.out.println("dooh-security-scanner " + VERSION); return false;
                 default: throw new IllegalArgumentException("unknown option: " + a);
@@ -463,8 +478,9 @@ public final class DOOHSecurityScanner {
         System.out.println("      --intrusive        also try vendor default passwords (ONLY with the owner's written consent)");
         System.out.println("      --templates <dir>  template folder (default: ./templates, else the templates packaged in the jar)");
         System.out.println("      --nuclei <path>    Nuclei executable (default: next to the scanner, cached copy, then PATH;");
-        System.out.println("                         if none is found the pinned Nuclei " + NucleiInstaller.VERSION + " is downloaded and checksum-verified)");
-        System.out.println("      --install-nuclei   download/verify Nuclei now and exit");
+        System.out.println("                         if none is found the latest Nuclei for this machine is downloaded and checksum-verified)");
+        System.out.println("      --install-nuclei   download/verify Nuclei now (updates to the latest) and exit");
+        System.out.println("      --nuclei-version <v>  'latest' (default) or an exact version such as " + NucleiInstaller.VERSION + " for downloads");
         System.out.println("      --offline          never download anything");
         System.out.println("      --out <dir>        output folder (default: ./scans)");
         System.out.println("  -y, --yes              skip the confirmation prompt (you confirm you are authorised)");
