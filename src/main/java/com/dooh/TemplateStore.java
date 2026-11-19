@@ -78,7 +78,9 @@ final class TemplateStore {
             if (matches(target, expected)) {
                 return target;
             }
-            Path staging = target.resolveSibling(target.getFileName() + ".tmp");
+            // normalised and absolute, so the zip-slip check below compares like with like even when the cache folder
+            // was given with ".." or as a relative path (e.g. DOOH_SCANNER_HOME=../cache)
+            Path staging = target.toAbsolutePath().normalize().resolveSibling(target.getFileName() + ".tmp");
             deleteTree(staging);
             for (String rel : expected.keySet()) {
                 Path dest = staging.resolve(rel).normalize();

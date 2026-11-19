@@ -6,6 +6,11 @@ Per-release notes are in [docs/releases/](docs/releases/).
 
 ## [Unreleased]
 
+### Fixed
+- Extracting the packaged templates failed with "Unsafe path in jar" when the cache folder (`DOOH_SCANNER_HOME`) was given with
+  `..` segments or as a relative path; the zip-slip check compared a normalised path with an un-normalised one. Found while testing
+  the published 1.0.0-rc3 packages on Linux. (The scanner still ran, using the templates shipped next to the jar.)
+
 ### Changed
 - CI and release workflows retry Maven only when a dependency/plugin download fails (Maven Central rate limits), via
   `scripts/mvn-retry.sh`; test and compile failures are never retried.

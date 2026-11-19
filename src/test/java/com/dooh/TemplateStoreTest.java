@@ -45,6 +45,15 @@ class TemplateStoreTest {
     }
 
     @Test
+    void worksWhenTheCacheFolderIsGivenWithDotDotSegments() throws Exception {
+        Path jar = jar(Map.of("templates/a/one.yaml", "id: one"));
+        Files.createDirectories(tmp.resolve("x"));
+        Path target = tmp.resolve("x").resolve("..").resolve("cache").resolve("t"); // not normalised
+        assertEquals(target, TemplateStore.extractFrom(jar, target));
+        assertEquals("id: one", Files.readString(target.resolve("a/one.yaml")));
+    }
+
+    @Test
     void restoresATamperedTemplate() throws Exception {
         Path jar = jar(Map.of("templates/one.yaml", "id: one"));
         Path target = tmp.resolve("t");
