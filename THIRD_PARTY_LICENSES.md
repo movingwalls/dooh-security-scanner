@@ -27,3 +27,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Eclipse Temurin / OpenJDK Java runtime (GPL v2 with the Classpath Exception)
+
+The self-contained release bundles (`...-windows-x64.zip`, `...-linux-*.tar.gz`, `...-macos-*.tar.gz`) include a Java 17
+runtime built with `jpackage` from Eclipse Temurin (https://adoptium.net), an OpenJDK build licensed under the GNU General Public
+License version 2 with the Classpath Exception. The runtime is unmodified and separate from this project's Apache-2.0 code. Its
+licence texts and notices are included in the bundle, in the `legal` folder inside the runtime folder (for example
+`lib/runtime/legal` on Linux), and the OpenJDK source code is available from https://github.com/openjdk/jdk17u. The jar-only
+downloads contain no Java runtime.

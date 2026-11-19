@@ -27,5 +27,6 @@ Product names are trademarks of their owners and are used only to say what a che
 
 ## Privacy
 The scanner runs on your machine. Results stay on your machine in the `scans/` folder. The only network
-traffic apart from the scan itself is the optional one-time download of Nuclei from GitHub, which you approve.
+traffic apart from the scan itself is the optional one-time download of Nuclei from GitHub, which you approve (the self-contained
+bundles already include it; `--nuclei-version latest` also asks GitHub which release is the newest).
 Moving Walls does not receive any scan data.

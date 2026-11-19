@@ -3,7 +3,12 @@
 ## Automated (every push, see `.github/workflows/ci.yml`)
 - `mvn verify`: unit tests, template lint (truncated files, `status: success`, spaced port lists, placeholder authors,
   intrusive tagging, ADB handshake bytes), installer checksum tests, HTML-escaping tests.
-- `nuclei -validate -t templates` with the pinned Nuclei version.
+- `PlantedBinaryTest` and `TemplateStoreTest`: the real scanner is run with a `nuclei` planted in the working folder, a tampered
+  cache entry and a relative `PATH` entry (none may run), and tampered or extra templates are restored from the jar.
+- `scripts/platform-test.sh` on Linux x64/arm64, macOS Intel/Apple Silicon and Windows: installs Nuclei (tested and latest),
+  runs `nuclei -validate -t templates`, runs the false-positive check below (Linux/macOS), and scans from a fresh machine.
+- `scripts/build-bundle.sh` on the same five platforms: builds the self-contained bundle and checks that it runs offline with
+  its own, trusted Nuclei.
 - `scripts/false-positive-check.sh`: a plain web server that looks like a home router must come back PASS.
 
 ## Real-device verification (required before removing the "release candidate" label)

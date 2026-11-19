@@ -5,8 +5,13 @@ Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 This product is designed to run with Nuclei by ProjectDiscovery
 (https://github.com/projectdiscovery/nuclei), licensed under the MIT licence.
-Nuclei is not part of this repository. On first run the scanner can download the
-official release, verified against a SHA-256 checksum, on the user's request.
+Nuclei is not part of this repository. The self-contained release bundles include the
+unmodified official Nuclei release, and the jar can download the official release,
+verified against a SHA-256 checksum, on the user's request.
+
+The self-contained release bundles also include a Java runtime (Eclipse Temurin / OpenJDK,
+GPL v2 with the Classpath Exception); its licence texts are in the bundle's runtime/legal folder.
+See THIRD_PARTY_LICENSES.md.
 
 templates/windows/rdp-open.yaml is adapted from the community template
 "rdp-detect" in https://github.com/projectdiscovery/nuclei-templates
