@@ -2,7 +2,8 @@ name: Release
 
 # Publishes a GitHub Release when a version tag such as v1.0.0 is pushed.
 # Assets:
-#   dooh-security-scanner-<version>.zip          portable: jar + templates + launchers (needs Java 17 and Nuclei)
+#   dooh-security-scanner-<version>.zip          portable: jar + templates + launchers (needs Java 17)
+#   dooh-security-scanner-<version>.jar          the single jar on its own (templates packaged inside; needs Java 17)
 #   dooh-security-scanner-<version>-windows.zip  self-contained: .exe with its own Java runtime + nuclei.exe + templates
 # Each asset has a .sha256 file next to it.
 
@@ -45,6 +46,8 @@ jobs:
           cp -r docs "$DIR/"
           zip -r "${DIR}.zip" "$DIR"
           sha256sum "${DIR}.zip" > "${DIR}.zip.sha256"
+          cp target/dooh-security-scanner.jar "${DIR}.jar"
+          sha256sum "${DIR}.jar" > "${DIR}.jar.sha256"
 
       - name: Create release and upload
         env:
@@ -55,7 +58,8 @@ jobs:
           NOTES="docs/releases/${GITHUB_REF_NAME}.md"
           if [ -f "$NOTES" ]; then NOTES_ARG="--notes-file $NOTES"; else NOTES_ARG="--generate-notes"; fi
           gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" $NOTES_ARG $PRE \
-            dooh-security-scanner-*.zip dooh-security-scanner-*.zip.sha256
+            dooh-security-scanner-*.zip dooh-security-scanner-*.zip.sha256 \
+            dooh-security-scanner-*.jar dooh-security-scanner-*.jar.sha256
 
   windows:
     needs: portable

@@ -38,10 +38,11 @@ Verify the download first with the `.sha256` file next to it (`certutil -hashfil
 
 **Officially supported: Windows 10/11 (64-bit).** Linux and macOS work on a best-effort basis.
 
-Download `dooh-security-scanner-<version>.zip` (or just the jar), install **Java 17+**, then:
+Download `dooh-security-scanner-<version>.zip` (or just `dooh-security-scanner-<version>.jar` from the same
+Releases page), install **Java 17+**, then:
 
 ```
-java -jar dooh-security-scanner.jar -t targets.txt
+java -jar dooh-security-scanner.jar -t targets.txt     # use the downloaded jar's file name
 ```
 
 You do **not** need to install Nuclei or copy the templates yourself:
