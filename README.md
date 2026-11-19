@@ -50,6 +50,9 @@ cp targets.example.txt targets.txt        # then edit it
 ./dooh-security-scanner -t targets.txt
 ```
 
+Always start the scanner with the `dooh-security-scanner` launcher in the extracted folder. On macOS it points the app at
+the official `nuclei` next to it; running the binary inside the `.app` directly would make the scanner download Nuclei instead.
+
 On **macOS**, a downloaded app is quarantined by Gatekeeper because these builds are not signed with an Apple
 developer certificate. Clear that once after extracting, then run as above:
 
@@ -167,7 +170,9 @@ field in each template.
 
 ```
 mvn verify                       # compile, unit tests, template lint -> target/dooh-security-scanner.jar
-scripts/false-positive-check.sh  # a plain web server must PASS (needs python3, root for port 80)
+scripts/platform-test.sh         # on your OS/CPU: installs Nuclei, validates every template, runs the checks below
+scripts/false-positive-check.sh  # a plain web server must PASS (needs python3, root for port 80 on Linux)
+scripts/build-bundle.sh linux-arm64 1.0.0   # self-contained bundle for the OS/CPU you are on (needs JDK 17)
 ```
 
 More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Releases are made by pushing a `v*` tag

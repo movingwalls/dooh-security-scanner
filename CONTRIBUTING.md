@@ -14,12 +14,14 @@ Thanks for helping make DOOH screens safer.
 
 ## Build and test
 ```
-mvn verify                                   # compile + unit tests + template lint
-nuclei -validate -t templates                # every template must load (see README for the pinned version)
+mvn verify                                   # compile + unit tests (incl. planted-binary tests) + template lint
+scripts/platform-test.sh                     # on your OS/CPU: install Nuclei, validate every template, false-positive check
+nuclei -validate -t templates                # every template must load (the tested Nuclei version is in NucleiInstaller.VERSION)
+scripts/build-bundle.sh <platform> <version> # optional: build the self-contained bundle for your own OS/CPU (needs JDK 17)
 ```
 
 ## Pull requests
 Describe what the change detects, how you tested it (device model/firmware), and include the
-output of `nuclei -validate`. By contributing you agree your work is released under the Apache License 2.0 (see LICENSE).
+output of `nuclei -validate`. CI runs the tests and builds the bundle on Linux x64/arm64, macOS Intel/Apple Silicon and Windows. By contributing you agree your work is released under the Apache License 2.0 (see LICENSE).
 Please follow the [Code of Conduct](CODE_OF_CONDUCT.md). Once templates are verified on real devices we intend to
 contribute them back to ProjectDiscovery's public template library.

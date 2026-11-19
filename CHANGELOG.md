@@ -24,6 +24,10 @@ Per-release notes are in [docs/releases/](docs/releases/).
   all of them pass.
 
 ### Changed
+- macOS bundles ship the untouched official Nuclei next to the `dooh-security-scanner` launcher (outside the `.app`), because
+  `jpackage` re-signs files inside the `.app`, which would change Nuclei's SHA-256. The launcher passes it with `--nuclei`.
+- NOTICE and THIRD_PARTY_LICENSES now credit the bundled Nuclei and the Eclipse Temurin/OpenJDK runtime; SECURITY.md records the
+  rc1/rc2 vulnerability; ARCHITECTURE, TESTING, CONTRIBUTING and LEGAL describe the current behaviour.
 - Self-contained bundles (own Java runtime, pinned Nuclei, templates) are now published for every mainstream
   platform, each built and smoke-tested natively: `windows-x64`, `linux-x64`, `linux-arm64`, `macos-x64`
   (Intel) and `macos-arm64` (Apple Silicon). Linux/macOS bundles are `.tar.gz`; Windows stays `.zip`.
