@@ -35,7 +35,7 @@ jobs:
           cache: maven
 
       - name: Build and unit tests
-        run: mvn -B verify
+        run: scripts/mvn-retry.sh -B verify
 
       - name: Target-machine test (auto-download Nuclei, validate templates, false-positive check, fresh-machine run)
         run: scripts/platform-test.sh
@@ -67,7 +67,7 @@ jobs:
           cache: maven
 
       - name: Build jar
-        run: mvn -B -DskipTests package
+        run: scripts/mvn-retry.sh -B -DskipTests package
 
       - name: Build and smoke-test the bundle
         run: scripts/build-bundle.sh "${{ matrix.platform }}" "1.0.0-ci"

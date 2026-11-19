@@ -37,7 +37,7 @@ jobs:
           cache: maven
 
       - name: Build and test
-        run: mvn -B verify
+        run: scripts/mvn-retry.sh -B verify
 
       - name: Package
         run: |
@@ -92,7 +92,7 @@ jobs:
           cache: maven
 
       - name: Build (tests already ran in the portable job)
-        run: mvn -B -DskipTests package
+        run: scripts/mvn-retry.sh -B -DskipTests package
 
       - name: Build, smoke-test and archive the bundle
         run: scripts/build-bundle.sh "${{ matrix.platform }}" "${GITHUB_REF_NAME#v}"

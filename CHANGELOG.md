@@ -4,6 +4,12 @@ All notable changes to this project are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versions follow [Semantic Versioning](https://semver.org/).
 Per-release notes are in [docs/releases/](docs/releases/).
 
+## [Unreleased]
+
+### Changed
+- CI and release workflows retry Maven only when a dependency/plugin download fails (Maven Central rate limits), via
+  `scripts/mvn-retry.sh`; test and compile failures are never retried.
+
 ## [1.0.0-rc3] - 2026-11-19 (release candidate)
 
 ### Security

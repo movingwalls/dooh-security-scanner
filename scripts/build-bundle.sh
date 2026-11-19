@@ -129,8 +129,9 @@ if [ "$RC" -ge 2 ] || grep -q "Skipping .*not the official Nuclei\|not checked a
   echo "The bundled Nuclei was not accepted or the scan failed (exit $RC):" >&2; cat "$WORK/smoke.log" >&2; exit 1
 fi
 # The bundled Nuclei must be the pinned one and must run on this CPU.
-"$(dirname "$(find "$FOLDER" -name "$EXE" -type f | head -1)")/$EXE" -version 2>&1 | grep -q "$NUCLEI_VERSION" \
-  || { echo "Bundled Nuclei did not report version $NUCLEI_VERSION" >&2; exit 1; }
+BUNDLED_NUCLEI="$(find "$FOLDER" -name "$EXE" -type f | head -1)"
+VERSION_OUT="$("$BUNDLED_NUCLEI" -version 2>&1 || true)"   # captured first: a pipe into grep -q can SIGPIPE under pipefail
+case "$VERSION_OUT" in *"$NUCLEI_VERSION"*) ;; *) echo "Bundled Nuclei did not report version $NUCLEI_VERSION: $VERSION_OUT" >&2; exit 1 ;; esac
 
 echo "== Archiving"
 NAME="dooh-security-scanner-${VERSION}-${PLATFORM}"
