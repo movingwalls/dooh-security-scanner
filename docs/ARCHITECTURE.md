@@ -4,9 +4,12 @@
 ```
 targets (-t file | -h list | --discover)
    -> TargetParser      validate + expand (IPv4, CIDR /22-/32, host names; reject everything else)
-   -> locate templates  ./templates, else packaged in the jar (extracted to ~/.dooh-security-scanner/templates/<ver>)
-   -> locate Nuclei     --nuclei, next to the jar, ~/.dooh-security-scanner/nuclei/<ver>, PATH,
-                        else offer to download the pinned release (SHA-256 verified)
+   -> locate templates  --templates <dir>, else the templates packaged in the jar, extracted to
+                        ~/.dooh-security-scanner/templates/<ver> and re-checked against the jar on every run
+                        (the current folder is never searched)
+   -> locate Nuclei     --nuclei <path> (run as given, with a warning if unofficial), else only an official build
+                        (SHA-256 checked) next to the jar, in ~/.dooh-security-scanner/nuclei/<ver> or on an absolute
+                        PATH entry; else offer to download the tested release (SHA-256 verified)
    -> confirm           authorisation prompt (--yes to skip)
    -> nuclei -validate  any template that fails to load => ERROR (exit 3), never PASS
    -> nuclei -l targets.txt -t templates -rate-limit 10 -c 5 -timeout 4 -silent -nc -ni -duc -jsonl -o results.jsonl
@@ -20,7 +23,7 @@ targets (-t file | -h list | --discover)
 | `DOOHSecurityScanner` | CLI, orchestration, exit codes |
 | `TargetParser` | input validation; the only gate for what reaches Nuclei |
 | `NucleiInstaller` | downloads the tested Nuclei for this OS/CPU from the official GitHub release, verified against compiled-in SHA-256 values (archive and executable); optionally the latest release; decides which Nuclei is trusted to run |
-| `TemplateStore` | extracts the templates packaged in the jar |
+| `TemplateStore` | extracts the templates packaged in the jar and re-verifies the extracted copy against the jar on every run |
 | `LocalArpScanner` | optional LAN discovery (real subnet, no VPN/virtual adapters, no multicast) |
 | `DOOHReportPrinter` | PASS/REVIEW/FAIL classification and text/JSON/HTML output |
 | `Json` | tiny JSON reader/writer (no third-party dependencies) |
@@ -29,8 +32,9 @@ targets (-t file | -h list | --discover)
 - Nuclei is started with an argument list, never through a shell; targets are written to a list file.
 - Only this project's templates are loaded (`-t <dir>`), never Nuclei's general exploit library.
 - `intrusive`-tagged templates (anything sending credentials) are excluded unless `--intrusive`.
-- Downloads: HTTPS only, pinned version, SHA-256 compiled into the code, verified before extraction,
-  only the Nuclei executable is extracted.
+- Downloads: HTTPS only, tested version by default, SHA-256 of the archive and of the extracted executable compiled into the
+  code, verified before anything is kept; only the Nuclei executable is extracted.
+- The current folder is never searched for Nuclei or templates; see "Which Nuclei is run" below.
 - HTML report escapes all device-supplied text and has a no-script content-security-policy.
 
 ## Status model
