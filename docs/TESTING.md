@@ -11,6 +11,15 @@
   its own, trusted Nuclei.
 - `scripts/false-positive-check.sh`: a plain web server that looks like a home router must come back PASS.
 
+## Testing a published release on a real machine
+After a release is published, run the packages the way a user would, on each OS you care about:
+- **Windows:** `powershell -ExecutionPolicy Bypass -File scripts\windows-smoke-test.ps1 -Tag v1.0.0-rc3` downloads the Windows bundle,
+  verifies its checksum and tests it against simulated devices on 127.0.0.1 (open ADB + VNC, ADB that asks for authorisation),
+  plus a planted `nuclei.exe` in the working folder and a tampered Nuclei next to the app (neither may ever run). Use Windows
+  PowerShell 5.1 (it builds the planted test exe with `Add-Type`). Nothing outside the computer is scanned.
+- **Linux / macOS:** download the `.tar.gz`, verify the `.sha256`, extract, and run `./dooh-security-scanner` against a simulated
+  device (a small script listening on 127.0.0.1:5555 and :5900 is enough).
+
 ## Real-device verification (required before removing the "release candidate" label)
 Run the scanner against each device below, once with default settings and once with `--intrusive` where noted,
 and record the result. Use test devices you own.
