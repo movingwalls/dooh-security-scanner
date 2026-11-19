@@ -30,7 +30,9 @@ for WANT in latest "$TESTED"; do
   NUCLEI="$(printf '%s\n' "$OUT" | sed -n 's/^Nuclei is ready: //p' | tail -1)"
   [ -f "$NUCLEI" ] || { echo "Installed Nuclei not found: $NUCLEI" >&2; exit 1; }
   if [ "$WANT" != latest ]; then
-    "$NUCLEI" -version -duc -nc 2>&1 | grep -q "v$WANT" || { echo "Wrong version installed" >&2; exit 1; }
+    # capture first: "nuclei | grep -q" can fail under pipefail when grep exits early and nuclei gets SIGPIPE
+    VERSION_OUT="$("$NUCLEI" -version -duc -nc 2>&1 || true)"
+    case "$VERSION_OUT" in *"v$WANT"*) ;; *) echo "Wrong version installed: $VERSION_OUT" >&2; exit 1 ;; esac
   fi
 
   echo "== Nuclei '$WANT': every template loads"
