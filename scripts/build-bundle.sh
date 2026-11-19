@@ -48,7 +48,10 @@ chmod +x "$WORK/nuclei/$EXE"
 
 cp target/dooh-security-scanner.jar "$WORK/input/"
 cp -r templates "$WORK/input/"
-cp "$WORK/nuclei/$EXE" LICENSE NOTICE THIRD_PARTY_LICENSES.md "$WORK/input/"
+cp LICENSE NOTICE THIRD_PARTY_LICENSES.md "$WORK/input/"
+# On macOS jpackage re-signs every file inside the .app, which changes the bytes of Nuclei (and so its SHA-256, which the
+# scanner checks). There the untouched official Nuclei is placed next to the launcher instead, outside the signed .app.
+case "$PLATFORM" in macos-*) ;; *) cp "$WORK/nuclei/$EXE" "$WORK/input/" ;; esac
 
 echo "== Building the native app with its own Java runtime (jpackage)"
 APP_VERSION="${VERSION%%-*}"   # jpackage wants plain numbers: 1.0.0-rc3 -> 1.0.0
@@ -85,11 +88,16 @@ esac
 #   ./dooh-security-scanner -t targets.txt
 if [ "$PLATFORM" != windows-x64 ]; then
   REL="${BIN#"$FOLDER"/}"
+  NUCLEI_ARGS=""
+  if [ "${PLATFORM#macos-}" != "$PLATFORM" ]; then
+    cp "$WORK/nuclei/$EXE" "$FOLDER/$EXE"
+    NUCLEI_ARGS=" --nuclei \"\$DIR/$EXE\""   # an explicit --nuclei given by the user later on the command line wins
+  fi
   cat > "$FOLDER/dooh-security-scanner" <<EOF
 #!/bin/sh
 # Launcher for the bundled app (includes its own Java runtime; no Java install needed).
 DIR="\$(cd "\$(dirname "\$0")" && pwd)"
-exec "\$DIR/${REL}" "\$@"
+exec "\$DIR/${REL}"${NUCLEI_ARGS} "\$@"
 EOF
   chmod +x "$FOLDER/dooh-security-scanner"
 fi
@@ -101,21 +109,23 @@ if [ "$PLATFORM" = windows-x64 ]; then
 fi
 
 echo "== Smoke test"
-"$BIN" --version
-"$BIN" --help >/dev/null
+LAUNCH="$BIN"
+[ "$PLATFORM" = windows-x64 ] || LAUNCH="$FOLDER/dooh-security-scanner"   # what users run
+"$LAUNCH" --version
+"$LAUNCH" --help >/dev/null
 # No Nuclei given and downloads forbidden => must fail cleanly with exit code 3, not crash.
 set +e
-"$BIN" -h 127.0.0.1 --yes --offline --nuclei missing-nuclei >/dev/null 2>&1
+"$LAUNCH" -h 127.0.0.1 --yes --offline --nuclei missing-nuclei >/dev/null 2>&1
 RC=$?
 set -e
 [ "$RC" -eq 3 ] || { echo "Expected exit code 3 for a missing Nuclei, got $RC" >&2; exit 1; }
 # The scanner must find and TRUST the Nuclei shipped in the bundle (its SHA-256 must still match the official
 # build after packaging/signing) and scan with it: empty cache, downloads forbidden. Exit 0/1 = scanned.
 set +e
-DOOH_SCANNER_HOME="$WORK/empty-home" "$BIN" -h 127.0.0.1 --yes --offline --out "$WORK/smoke-scans" >"$WORK/smoke.log" 2>&1
+DOOH_SCANNER_HOME="$WORK/empty-home" "$LAUNCH" -h 127.0.0.1 --yes --offline --out "$WORK/smoke-scans" >"$WORK/smoke.log" 2>&1
 RC=$?
 set -e
-if [ "$RC" -ge 2 ] || grep -q "Skipping .*not the official Nuclei" "$WORK/smoke.log"; then
+if [ "$RC" -ge 2 ] || grep -q "Skipping .*not the official Nuclei\|not checked against the official build" "$WORK/smoke.log"; then
   echo "The bundled Nuclei was not accepted or the scan failed (exit $RC):" >&2; cat "$WORK/smoke.log" >&2; exit 1
 fi
 # The bundled Nuclei must be the pinned one and must run on this CPU.
